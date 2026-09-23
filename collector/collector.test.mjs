@@ -116,3 +116,39 @@ test('collect : une nouvelle source est collectée sur 60 jours même avec un hi
   assert.ok(calls[0].includes('maxAgeDays=7'));
   assert.ok(calls[1].includes('maxAgeDays=60'));
 });
+
+import { extractSummary, decodeEntities } from './normalize.mjs';
+import { addSummaries } from './collect.mjs';
+
+test('résumé : balises d\'aperçu, entités, longueur', () => {
+  const html = `<html><head><title>x</title>
+    <meta content="Cette vidéo ne montre pas les inondations de 2026 : elle a été filmée en 2019 au Pérou, selon une recherche d&#39;image inversée." property="og:description">
+    <meta name="description" content="autre">`;
+  assert.equal(extractSummary(html), "Cette vidéo ne montre pas les inondations de 2026 : elle a été filmée en 2019 au Pérou, selon une recherche d'image inversée.");
+  assert.equal(extractSummary('<meta name="description" content="Trop court">'), null);
+  assert.equal(extractSummary('<p>pas de balise</p>'), null);
+  const same = '<meta property="og:description" content="Non, ces images ne montrent pas un couple fuyant le Maroc">';
+  assert.equal(extractSummary(same, 'Non, ces images ne montrent pas un couple fuyant le Maroc'), null);
+  const long = `<meta property="og:description" content="${'Phrase de contexte assez longue pour le test. '.repeat(15)}">`;
+  assert.ok(extractSummary(long).length <= 421);
+  assert.equal(decodeEntities('l&rsquo;image &amp; &laquo;vid&eacute;o&raquo;'), 'l’image & «vidéo»');
+});
+
+test('résumés : un seul essai par vérification, échecs notés null', async () => {
+  const items = [
+    { id: 'a', url: 'https://ok.fr/a', title: 't' },
+    { id: 'b', url: 'https://ko.fr/b', title: 't' },
+    { id: 'c', url: 'https://ok.fr/c', title: 't', summary: 'déjà là' },
+  ];
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url.includes('ko.fr')) return { ok: false, status: 403, text: async () => '' };
+    return { ok: true, text: async () => '<meta property="og:description" content="Un résumé suffisamment long pour être retenu par le collecteur.">' };
+  };
+  await addSummaries(items, { fetchImpl, log: () => {} });
+  assert.deepEqual(calls.sort(), ['https://ko.fr/b', 'https://ok.fr/a']);
+  assert.equal(items[0].summary, 'Un résumé suffisamment long pour être retenu par le collecteur.');
+  assert.equal(items[1].summary, null);
+  assert.equal(items[2].summary, 'déjà là');
+});

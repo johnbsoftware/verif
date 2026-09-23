@@ -210,3 +210,5 @@ button:disabled { opacity: 0.55; cursor: default; }
 }
 .tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.5; color: var(--ink-2); }
 .tab { min-width: 64px; }
+
+.panel-summary { margin: 0; font-size: 16px; line-height: 1.55; color: var(--ink); padding-top: 10px; border-top: 1px solid var(--line-soft); }

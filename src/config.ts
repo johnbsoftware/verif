@@ -3,7 +3,7 @@
  * À remplacer par la vôtre : https://<pseudo-github>.github.io/<nom-du-dépôt>/feed.json
  * Tant qu'elle contient VOTRE-PSEUDO, l'appli se contente du flux embarqué.
  */
-export const FEED_URL = 'https://VOTRE-PSEUDO.github.io/verif/feed.json';
+export const FEED_URL = 'https://johnbsoftware.github.io/verif/feed.json';
 
 /** Flux embarqué dans l'APK (démonstration, ou collecte locale via « npm run collect »). */
 export const BUNDLED_FEED = './feed.json';

@@ -49,6 +49,12 @@ export function DetailScreen({ item, saved, onBack, onToggleSave }: Props) {
           <h2 className="section-title">Conclusion du vérificateur</h2>
           <p className="panel-rating">{item.rating || 'Voir l’article'}</p>
           {item.title && <p className="panel-title">{item.title}</p>}
+          {item.summary && (
+            <>
+              <p className="panel-summary">{item.summary}</p>
+              <p className="fineprint">Résumé publié par {item.publisher} avec son article.</p>
+            </>
+          )}
         </section>
 
         <section className="source">

@@ -12,7 +12,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { toItem, mergeItems, classifyVerdict, classifyTheme } from './normalize.mjs';
+import { toItem, mergeItems, classifyVerdict, classifyTheme, extractSummary } from './normalize.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const API = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
@@ -22,6 +22,9 @@ const MAX_PAGES = 6;
 const DAILY_WINDOW_DAYS = 7; // l'indexation Google peut avoir quelques jours de retard
 const FIRST_WINDOW_DAYS = 60;
 const KEEP_DAYS = 60;
+const SUMMARY_CONCURRENCY = 4;
+const SUMMARY_BUDGET_MS = 4 * 60 * 1000; // au-delà, on s'arrête : le reste sera fait demain
+const USER_AGENT = 'VerifBot/1.0 (appli Vérif ; lecture du résumé des articles de vérification)';
 
 function args(argv) {
   const out = {};
@@ -67,6 +70,49 @@ async function loadPrevious(where, fetchImpl) {
   }
 }
 
+/** Télécharge l'article et en extrait le résumé écrit par la rédaction (null si impossible). */
+export async function fetchSummary(item, fetchImpl) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const res = await fetchImpl(item.url, {
+      signal: ctrl.signal,
+      redirect: 'follow',
+      headers: { 'user-agent': USER_AGENT, 'accept-language': 'fr-FR,fr;q=0.9,en;q=0.6', accept: 'text/html' },
+    });
+    if (!res.ok || typeof res.text !== 'function') return null;
+    const html = (await res.text()).slice(0, 400_000);
+    return extractSummary(html, item.title ?? '');
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Ajoute le résumé aux vérifications qui n'en ont pas encore (champ absent).
+ * Un échec est noté summary: null pour ne pas retenter chaque jour.
+ */
+export async function addSummaries(items, { fetchImpl = fetch, log = console.log, budgetMs = SUMMARY_BUDGET_MS } = {}) {
+  const todo = items.filter((it) => it.summary === undefined);
+  if (!todo.length) return 0;
+  const start = Date.now();
+  let done = 0;
+  let found = 0;
+  const worker = async () => {
+    while (todo.length && Date.now() - start < budgetMs) {
+      const it = todo.shift();
+      it.summary = await fetchSummary(it, fetchImpl);
+      done++;
+      if (it.summary) found++;
+    }
+  };
+  await Promise.all(Array.from({ length: SUMMARY_CONCURRENCY }, worker));
+  log(`Résumés : ${found} trouvés sur ${done} articles lus${todo.length ? ` (${todo.length} reportés à la prochaine collecte)` : ''}`);
+  return found;
+}
+
 async function searchSite(source, { key, maxAgeDays, fetchImpl, log }) {
   const claims = [];
   let pageToken;
@@ -92,7 +138,7 @@ async function searchSite(source, { key, maxAgeDays, fetchImpl, log }) {
   return claims;
 }
 
-export async function collect({ key, sources, previous, now = new Date(), fetchImpl = fetch, log = console.log }) {
+export async function collect({ key, sources, previous, now = new Date(), fetchImpl = fetch, log = console.log, summaries = true }) {
   const hadHistory = Array.isArray(previous?.items) && previous.items.length > 0 && !previous.demo;
   // Un organisme absent de l'historique (nouvelle source) est collecté sur toute la période.
   const knownSites = new Set(hadHistory ? previous.items.map((it) => it.site) : []);
@@ -124,7 +170,11 @@ export async function collect({ key, sources, previous, now = new Date(), fetchI
   const history = (hadHistory ? previous.items : [])
     .filter((it) => sites.has(it.site))
     .map((it) => ({ ...it, verdict: classifyVerdict(it.rating), theme: classifyTheme(it.claim, it.title ?? '') }));
+  // Une vérification déjà connue garde son résumé (la nouvelle version de l'API n'en a pas).
+  const known = new Map(history.map((it) => [it.id, it]));
+  for (const it of fresh) if (known.has(it.id) && known.get(it.id).summary !== undefined) it.summary = known.get(it.id).summary;
   const items = mergeItems(history, fresh, { now, keepDays: KEEP_DAYS });
+  if (summaries) await addSummaries(items, { fetchImpl, log });
   const counts = Object.fromEntries(sources.map((s) => [s.site, 0]));
   for (const it of items) counts[it.site] = (counts[it.site] ?? 0) + 1;
 

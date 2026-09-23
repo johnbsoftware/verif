@@ -15,6 +15,8 @@ export interface FactCheck {
   publisher: string;
   site: string;
   title: string | null;
+  /** Résumé écrit par la rédaction (balise d'aperçu de l'article) ; null si introuvable. */
+  summary?: string | null;
   url: string;
   reviewDate: string;
 }

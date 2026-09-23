@@ -171,3 +171,35 @@ export function mergeItems(previous, fresh, { now = new Date(), keepDays = 60, m
     .sort((a, b) => Date.parse(b.reviewDate) - Date.parse(a.reviewDate))
     .slice(0, maxItems);
 }
+
+// --- Résumé de l'article (balises d'aperçu écrites par la rédaction) ---
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', hellip: '…', laquo: '«', raquo: '»', eacute: 'é', egrave: 'è', agrave: 'à', ccedil: 'ç' };
+
+export function decodeEntities(s) {
+  return String(s)
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&([a-z]+);/gi, (m, n) => ENTITIES[n.toLowerCase()] ?? m);
+}
+
+/** Lit og:description / twitter:description / description dans le HTML d'un article. */
+export function extractSummary(html, title = '') {
+  const metas = {};
+  for (const tag of String(html).match(/<meta\b[^>]*>/gi) ?? []) {
+    const attrs = {};
+    for (const m of tag.matchAll(/([\w:-]+)\s*=\s*("([^"]*)"|'([^']*)')/g)) attrs[m[1].toLowerCase()] = m[3] ?? m[4] ?? '';
+    const key = (attrs.property || attrs.name || '').toLowerCase();
+    if (key && attrs.content && !(key in metas)) metas[key] = attrs.content;
+  }
+  const raw = metas['og:description'] || metas['twitter:description'] || metas['description'];
+  if (!raw) return null;
+  let text = decodeEntities(raw).replace(/\s+/g, ' ').trim();
+  if (text.length < 40 || fold(text) === fold(title)) return null;
+  if (text.length > 420) {
+    const cut = text.slice(0, 420);
+    const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+    text = end > 200 ? cut.slice(0, end + 1) : `${cut.replace(/\s+\S*$/, '')}…`;
+  }
+  return text;
+}
