@@ -183,7 +183,52 @@ export function decodeEntities(s) {
     .replace(/&([a-z]+);/gi, (m, n) => ENTITIES[n.toLowerCase()] ?? m);
 }
 
-/** Lit og:description / twitter:description / description dans le HTML d'un article. */
+const BOILERPLATE = /cookie|consentement|consent|javascript|abonnez|abonnement|newsletter|inscrivez|subscribe|sign up|log in|connectez|publicit|advertis|tous droits|all rights reserved|copyright/;
+const squash = (x) => fold(x).replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** Vrai si le texte ne fait que répéter le titre (éventuellement avec un préfixe du genre « VÉRIF' - »). */
+export function repeatsTitle(text, title) {
+  const a = squash(text);
+  const b = squash(title);
+  if (!b) return false;
+  return a === b || b.includes(a) || (a.includes(b) && a.length - b.length < 40);
+}
+
+function stripTags(html) {
+  return decodeEntities(String(html).replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+function shorten(text) {
+  if (text.length <= 420) return text;
+  const cut = text.slice(0, 420);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  return end > 200 ? cut.slice(0, end + 1) : `${cut.replace(/\s+\S*$/, '')}…`;
+}
+
+function acceptable(text, title, min) {
+  return text && text.length >= min && !BOILERPLATE.test(fold(text)) && !repeatsTitle(text, title);
+}
+
+function jsonLdTexts(html) {
+  const out = [];
+  const visit = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(visit);
+    for (const key of ['reviewBody', 'description', 'abstract']) if (typeof node[key] === 'string') out.push(node[key]);
+    Object.values(node).forEach(visit);
+  };
+  for (const m of String(html).matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { visit(JSON.parse(m[1])); } catch { /* JSON-LD invalide : ignoré */ }
+  }
+  return out;
+}
+
+/**
+ * Résumé d'un article de vérification, par ordre de préférence : balises d'aperçu
+ * (og:description, twitter:description, description), données structurées (JSON-LD),
+ * puis premier paragraphe substantiel de l'article (le chapô). Un texte qui ne fait
+ * que répéter le titre est écarté.
+ */
 export function extractSummary(html, title = '') {
   const metas = {};
   for (const tag of String(html).match(/<meta\b[^>]*>/gi) ?? []) {
@@ -192,14 +237,17 @@ export function extractSummary(html, title = '') {
     const key = (attrs.property || attrs.name || '').toLowerCase();
     if (key && attrs.content && !(key in metas)) metas[key] = attrs.content;
   }
-  const raw = metas['og:description'] || metas['twitter:description'] || metas['description'];
-  if (!raw) return null;
-  let text = decodeEntities(raw).replace(/\s+/g, ' ').trim();
-  if (text.length < 40 || fold(text) === fold(title)) return null;
-  if (text.length > 420) {
-    const cut = text.slice(0, 420);
-    const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
-    text = end > 200 ? cut.slice(0, end + 1) : `${cut.replace(/\s+\S*$/, '')}…`;
+  const clean = (x) => decodeEntities(x).replace(/\s+/g, ' ').trim();
+  for (const raw of [metas['og:description'], metas['twitter:description'], metas['description'], ...jsonLdTexts(html)]) {
+    if (!raw) continue;
+    const text = clean(raw);
+    if (acceptable(text, title, 60)) return shorten(text);
   }
-  return text;
+  const body = /<article\b[\s\S]*?<\/article>/i.exec(html)?.[0] ?? /<body\b[\s\S]*<\/body>/i.exec(html)?.[0] ?? '';
+  for (const m of body.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)) {
+    const text = stripTags(m[1]);
+    if (/^(par |publi|mis a jour|updated|by )/i.test(fold(text))) continue;
+    if (acceptable(text, title, 90)) return shorten(text);
+  }
+  return null;
 }

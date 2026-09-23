@@ -24,7 +24,10 @@ const FIRST_WINDOW_DAYS = 60;
 const KEEP_DAYS = 60;
 const SUMMARY_CONCURRENCY = 4;
 const SUMMARY_BUDGET_MS = 4 * 60 * 1000; // au-delà, on s'arrête : le reste sera fait demain
-const USER_AGENT = 'VerifBot/1.0 (appli Vérif ; lecture du résumé des articles de vérification)';
+// Certains sites refusent les navigateurs inconnus : on se présente comme un navigateur mobile, en signant.
+const USER_AGENT = 'Mozilla/5.0 (Linux; Android 16; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36 VerifBot/1.0';
+// À incrémenter quand l'extraction s'améliore : les articles sans résumé sont alors relus une fois.
+export const SUMMARY_VERSION = 2;
 
 function args(argv) {
   const out = {};
@@ -70,45 +73,66 @@ async function loadPrevious(where, fetchImpl) {
   }
 }
 
-/** Télécharge l'article et en extrait le résumé écrit par la rédaction (null si impossible). */
+/** Télécharge l'article et en extrait le résumé écrit par la rédaction. */
 export async function fetchSummary(item, fetchImpl) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  const timer = setTimeout(() => ctrl.abort(), 12_000);
   try {
     const res = await fetchImpl(item.url, {
       signal: ctrl.signal,
       redirect: 'follow',
-      headers: { 'user-agent': USER_AGENT, 'accept-language': 'fr-FR,fr;q=0.9,en;q=0.6', accept: 'text/html' },
+      headers: {
+        'user-agent': USER_AGENT,
+        'accept-language': 'fr-FR,fr;q=0.9,en;q=0.6',
+        accept: 'text/html,application/xhtml+xml',
+      },
     });
-    if (!res.ok || typeof res.text !== 'function') return null;
-    const html = (await res.text()).slice(0, 400_000);
-    return extractSummary(html, item.title ?? '');
-  } catch {
-    return null;
+    if (!res.ok) return { summary: null, reason: `HTTP ${res.status}` };
+    if (typeof res.text !== 'function') return { summary: null, reason: 'réponse illisible' };
+    const html = (await res.text()).slice(0, 600_000);
+    const summary = extractSummary(html, item.title ?? '');
+    return { summary, reason: summary ? 'ok' : 'aucun résumé dans la page' };
+  } catch (e) {
+    return { summary: null, reason: e?.name === 'AbortError' ? 'délai dépassé' : 'erreur réseau' };
   } finally {
     clearTimeout(timer);
   }
 }
 
+const needsSummary = (it) => it.summary === undefined || (it.summary === null && (it.summaryV ?? 1) < SUMMARY_VERSION);
+
 /**
- * Ajoute le résumé aux vérifications qui n'en ont pas encore (champ absent).
- * Un échec est noté summary: null pour ne pas retenter chaque jour.
+ * Ajoute le résumé aux vérifications qui n'en ont pas encore. Un échec est noté
+ * summary: null (avec summaryV) : il ne sera retenté qu'après une amélioration de l'extraction.
+ * Affiche le bilan par organisme et par cause d'échec.
  */
 export async function addSummaries(items, { fetchImpl = fetch, log = console.log, budgetMs = SUMMARY_BUDGET_MS } = {}) {
-  const todo = items.filter((it) => it.summary === undefined);
+  const todo = items.filter(needsSummary);
   if (!todo.length) return 0;
   const start = Date.now();
+  const bySite = new Map();
   let done = 0;
   let found = 0;
   const worker = async () => {
     while (todo.length && Date.now() - start < budgetMs) {
       const it = todo.shift();
-      it.summary = await fetchSummary(it, fetchImpl);
+      const { summary, reason } = await fetchSummary(it, fetchImpl);
+      it.summary = summary;
+      it.summaryV = SUMMARY_VERSION;
       done++;
-      if (it.summary) found++;
+      if (summary) found++;
+      const st = bySite.get(it.site) ?? { ok: 0, total: 0, reasons: {} };
+      st.total++;
+      if (summary) st.ok++;
+      else st.reasons[reason] = (st.reasons[reason] ?? 0) + 1;
+      bySite.set(it.site, st);
     }
   };
   await Promise.all(Array.from({ length: SUMMARY_CONCURRENCY }, worker));
+  for (const [site, st] of bySite) {
+    const why = Object.entries(st.reasons).map(([r, n]) => `${r} ×${n}`).join(', ');
+    log(`  ${String(site ?? "?").padEnd(28)} ${String(st.ok).padStart(4)} / ${String(st.total).padEnd(4)} ${why}`);
+  }
   log(`Résumés : ${found} trouvés sur ${done} articles lus${todo.length ? ` (${todo.length} reportés à la prochaine collecte)` : ''}`);
   return found;
 }
@@ -172,7 +196,13 @@ export async function collect({ key, sources, previous, now = new Date(), fetchI
     .map((it) => ({ ...it, verdict: classifyVerdict(it.rating), theme: classifyTheme(it.claim, it.title ?? '') }));
   // Une vérification déjà connue garde son résumé (la nouvelle version de l'API n'en a pas).
   const known = new Map(history.map((it) => [it.id, it]));
-  for (const it of fresh) if (known.has(it.id) && known.get(it.id).summary !== undefined) it.summary = known.get(it.id).summary;
+  for (const it of fresh) {
+    const old = known.get(it.id);
+    if (old && old.summary !== undefined) {
+      it.summary = old.summary;
+      if (old.summaryV !== undefined) it.summaryV = old.summaryV;
+    }
+  }
   const items = mergeItems(history, fresh, { now, keepDays: KEEP_DAYS });
   if (summaries) await addSummaries(items, { fetchImpl, log });
   const counts = Object.fromEntries(sources.map((s) => [s.site, 0]));

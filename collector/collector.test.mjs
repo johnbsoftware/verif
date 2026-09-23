@@ -152,3 +152,29 @@ test('résumés : un seul essai par vérification, échecs notés null', async (
   assert.equal(items[1].summary, null);
   assert.equal(items[2].summary, 'déjà là');
 });
+
+import { repeatsTitle } from './normalize.mjs';
+
+test('résumé v2 : titre répété écarté, repli sur JSON-LD puis sur le chapô', () => {
+  const title = 'Ces images de "braquages dans le Nord", virales sur TikTok, sont-elles réelles ?';
+  assert.ok(repeatsTitle(`VÉRIF' - ${title}`, title));
+  const withLd = `<meta property="og:description" content="VÉRIF' - ${title}">
+    <script type="application/ld+json">{"@type":"ClaimReview","reviewBody":"Ces vidéos ont été tournées en 2021 en Belgique et ne montrent aucun braquage récent dans la métropole lilloise."}</script>`;
+  assert.match(extractSummary(withLd, title), /tournées en 2021 en Belgique/);
+  const withLead = `<meta property="og:description" content="${title}"><body><article>
+    <p>Par la rédaction</p><p>Acceptez les cookies pour continuer votre lecture sur notre site internet ce soir.</p>
+    <p>Plusieurs vidéos présentées comme des braquages filmés à Lille circulent sur TikTok. Il s'agit en réalité d'extraits d'une série policière diffusée en 2019.</p>
+    </article></body>`;
+  assert.match(extractSummary(withLead, title), /série policière diffusée en 2019/);
+});
+
+test('résumés v2 : les échecs de la version 1 sont retentés une fois', async () => {
+  const items = [
+    { id: 'a', site: 's', url: 'https://s/a', title: 't', summary: null },
+    { id: 'b', site: 's', url: 'https://s/b', title: 't', summary: null, summaryV: 2 },
+  ];
+  const calls = [];
+  await addSummaries(items, { fetchImpl: async (u) => { calls.push(u); return { ok: false, status: 403 }; }, log: () => {} });
+  assert.deepEqual(calls, ['https://s/a']);
+  assert.equal(items[0].summaryV, 2);
+});
