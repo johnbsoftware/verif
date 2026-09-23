@@ -144,6 +144,12 @@ async function main() {
   const out = resolve(a.out ?? 'public/feed.json');
   const { key, problem } = await readKey();
   if (!key) {
+    if (process.env.GITHUB_ACTIONS) {
+      console.error('Clé API manquante : le secret FACTCHECK_API_KEY est absent ou vide.');
+      console.error('À créer dans Settings > Secrets and variables > Actions > onglet « Secrets » (pas « Variables »),');
+      console.error('bouton « New repository secret », nom exact : FACTCHECK_API_KEY');
+      process.exit(2);
+    }
     console.error(`Clé API manquante. ${problem}`);
     console.error('Le fichier .env doit contenir une seule ligne : FACTCHECK_API_KEY=AIza...');
     process.exit(2);
