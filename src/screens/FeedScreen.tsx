@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { FactCheck, Feed, Settings } from '../types';
 import { applyFilters, countriesLabel, groupByDay, type VerdictFilter } from '../data/filters';
-import { hourLabel, plural, todayLabel } from '../lib/format';
+import { plural, todayLabel, whenLabel } from '../lib/format';
+import { remoteConfigured } from '../data/feed';
 import { ClaimCard } from '../components/ClaimCard';
 import { Chevron, Close, Globe, People, Refresh, Search } from '../components/Icons';
 import { socialOf } from '../data/social';
@@ -101,11 +102,13 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, onOp
         {notice && <p className="banner banner-soft">{notice}</p>}
         <div className="list-status">
           <span>
-            {feed ? `${plural(items.length, 'vérification', 'vérifications')} · mis à jour à ${hourLabel(feed.generatedAt)}` : 'Chargement…'}
+            {feed ? `${plural(items.length, 'vérification', 'vérifications')} · données ${remoteConfigured() ? 'mises à jour' : 'collectées'} ${whenLabel(feed.generatedAt)}` : 'Chargement…'}
           </span>
-          <button className="link-btn" onClick={onRefresh} disabled={loading} aria-label="Actualiser">
-            <Refresh /> {loading ? 'Actualisation…' : 'Actualiser'}
-          </button>
+          {remoteConfigured() && (
+            <button className="link-btn" onClick={onRefresh} disabled={loading} aria-label="Actualiser">
+              <Refresh /> {loading ? 'Actualisation…' : 'Actualiser'}
+            </button>
+          )}
         </div>
 
         {groups.map((g) => (

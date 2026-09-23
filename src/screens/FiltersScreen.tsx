@@ -1,6 +1,7 @@
 import type { Feed, Settings } from '../types';
 import { THEMES } from '../config';
-import { plural } from '../lib/format';
+import { plural, whenLabel } from '../lib/format';
+import { remoteConfigured } from '../data/feed';
 import { isFrench } from '../data/filters';
 
 interface Props {
@@ -95,7 +96,9 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
             </label>
           </div>
           <p className="muted small">
-            Le flux est collecté automatiquement chaque matin
+            {remoteConfigured()
+              ? 'Le flux est collecté automatiquement chaque matin'
+              : `Données collectées ${feed ? whenLabel(feed.generatedAt) : ''} et intégrées à l'appli (mise à jour automatique pas encore en place)`}
             {feed ? ` — ${plural(feed.items.length, 'vérification', 'vérifications')} sur ${feed.keepDays ?? 60} jours.` : '.'}
           </p>
         </section>

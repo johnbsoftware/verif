@@ -19,6 +19,17 @@ export function hourLabel(iso: string): string {
   return `${d.getHours()} h ${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/** « aujourd'hui à 8 h 57 », « hier à 6 h 30 », « le 21 sept. à 6 h 30 ». */
+export function whenLabel(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  const day = (x: Date) => x.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const prefix = day(d) === day(now) ? "aujourd'hui" : day(d) === day(yesterday) ? 'hier'
+    : `le ${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
+  return `${prefix} à ${hourLabel(iso)}`;
+}
+
 export function todayLabel(now = new Date()): string {
   const s = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   return s.charAt(0).toUpperCase() + s.slice(1);

@@ -5,6 +5,7 @@ import { cachedFeed, refreshFeed } from './data/feed';
 import { load, save } from './data/storage';
 import { REFRESH_AFTER_MS } from './config';
 import { isNative, setDailyDigest } from './lib/native';
+import { hourLabel, whenLabel } from './lib/format';
 import { FeedScreen } from './screens/FeedScreen';
 import { DetailScreen } from './screens/DetailScreen';
 import { FiltersScreen } from './screens/FiltersScreen';
@@ -27,15 +28,25 @@ export default function App() {
   const [shared, setShared] = useState<SharedContent | null>(null);
   const lastFetch = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const feedRef = useRef<Feed | null>(feed);
+  const refresh = useCallback(async (manual = false) => {
     setLoading(true);
     try {
+      const before = feedRef.current?.generatedAt;
       const r = await refreshFeed();
       setFeed(r.feed);
+      feedRef.current = r.feed;
       lastFetch.current = Date.now();
-      setNotice(r.error && r.origin !== 'remote' ? 'Hors ligne : affichage de la dernière version enregistrée.' : null);
-    } catch {
-      setNotice('Impossible de charger les vérifications. Vérifiez la connexion puis touchez Actualiser.');
+      const now = hourLabel(new Date().toISOString());
+      if (r.error && r.origin !== 'remote') {
+        setNotice(`Actualisation impossible à ${now} (${r.error}) : affichage des données ${whenLabel(r.feed.generatedAt)}.`);
+      } else if (manual && before === r.feed.generatedAt) {
+        setNotice(`Vérifié à ${now} : déjà à jour (dernière collecte ${whenLabel(r.feed.generatedAt)}). La prochaine collecte a lieu chaque matin vers 6 h 30.`);
+      } else if (manual) {
+        setNotice(`Nouvelles vérifications chargées à ${now}.`);
+      } else setNotice(null);
+    } catch (e) {
+      setNotice(`Impossible de charger les vérifications (${e instanceof Error ? e.message : String(e)}). Vérifiez la connexion puis touchez Actualiser.`);
     } finally {
       setLoading(false);
     }
@@ -113,7 +124,7 @@ export default function App() {
             notice={notice}
             onOpen={setDetail}
             onOpenFilters={() => setTab('filters')}
-            onRefresh={refresh}
+            onRefresh={() => refresh(true)}
           />
         </div>
         <div className="tab-panel" hidden={tab !== 'check'}>
