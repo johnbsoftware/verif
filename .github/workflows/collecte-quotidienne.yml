@@ -1,0 +1,53 @@
+# Collecte quotidienne des vérifications et publication de feed.json sur GitHub Pages.
+# Prérequis (une seule fois) :
+#   1. Settings > Secrets and variables > Actions > New repository secret
+#      Nom : FACTCHECK_API_KEY   Valeur : votre clé Google Fact Check Tools
+#   2. Settings > Pages > Build and deployment > Source : « GitHub Actions »
+# Le flux est ensuite servi à : https://<pseudo>.github.io/<dépôt>/feed.json
+
+name: Collecte quotidienne
+
+on:
+  schedule:
+    - cron: '30 4 * * *'   # 6 h 30 à Paris l'été, 5 h 30 l'hiver
+  workflow_dispatch:       # bouton « Run workflow » pour lancer à la main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: collecte
+  cancel-in-progress: false
+
+jobs:
+  collecte:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests du collecteur
+        run: node --test collector/collector.test.mjs
+
+      - name: Collecte
+        env:
+          FACTCHECK_API_KEY: ${{ secrets.FACTCHECK_API_KEY }}
+          PREVIOUS_FEED_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/feed.json
+        run: node collector/collect.mjs --out site/feed.json
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploiement
+        uses: actions/deploy-pages@v4

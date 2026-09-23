@@ -1,0 +1,118 @@
+// Tests du collecteur : node --test collector/
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { classifyVerdict, classifyTheme, toItem, mergeItems } from './normalize.mjs';
+import { collect } from './collect.mjs';
+
+test('verdicts : les pièges d\'ordre', () => {
+  const cases = {
+    'Faux': 'faux', 'FAUX': 'faux', 'C’est faux': 'faux', 'Infondé': 'faux', 'Inexact': 'faux',
+    'Incorrect': 'faux', 'Montage': 'faux', 'False': 'faux', 'Pants on Fire': 'faux', 'Image générée par IA': 'faux',
+    'Trompeur': 'trompeur', 'Partiellement faux': 'trompeur', 'Sorti de son contexte': 'trompeur',
+    'Photo sortie de son contexte': 'trompeur', 'Manque de contexte': 'trompeur', 'Exagéré': 'trompeur',
+    'Vrai, mais': 'trompeur', 'Misleading': 'trompeur', 'Half True': 'trompeur', 'Plutôt faux': 'trompeur',
+    'Vrai': 'vrai', 'Plutôt vrai': 'vrai', 'True': 'vrai', 'Correct': 'vrai', 'Exact': 'vrai',
+    'Satire': 'autre', '': 'autre', 'Explication': 'autre',
+  };
+  for (const [rating, expected] of Object.entries(cases)) {
+    assert.equal(classifyVerdict(rating), expected, rating);
+  }
+});
+
+test('thèmes', () => {
+  assert.equal(classifyTheme('Ce vaccin contre la grippe provoquerait un cancer'), 'Santé');
+  assert.equal(classifyTheme('Le président a annoncé une hausse des impôts et de la retraite'), 'Économie');
+  assert.equal(classifyTheme('Des images d’inondation attribuées au réchauffement'), 'Climat');
+  assert.equal(classifyTheme('Une vidéo montre des missiles tirés sur l’Ukraine'), 'International');
+  assert.equal(classifyTheme('Un chat qui joue du piano'), 'Divers');
+});
+
+const source = { site: 'factuel.afp.com', name: 'AFP Factuel', country: 'France', lang: 'fr' };
+const claim = (url, date, rating = 'Faux', text = 'Une affirmation') => ({
+  text, claimant: 'Réseaux sociaux', claimDate: date,
+  claimReview: [
+    { publisher: { name: 'Autre', site: 'autre.fr' }, url: 'https://autre.fr/x', reviewDate: date, textualRating: 'Vrai' },
+    { publisher: { name: 'AFP Factuel', site: 'factuel.afp.com' }, url, title: 'Titre', reviewDate: date, textualRating: rating, languageCode: 'fr' },
+  ],
+});
+
+test('toItem choisit la vérification de la source interrogée', () => {
+  const it = toItem(claim('https://factuel.afp.com/doc.afp.com.1', '2026-09-20T10:00:00Z'), source);
+  assert.equal(it.url, 'https://factuel.afp.com/doc.afp.com.1');
+  assert.equal(it.verdict, 'faux');
+  assert.equal(it.country, 'France');
+  assert.equal(it.publisher, 'AFP Factuel');
+  assert.equal(toItem({ text: 'x', claimReview: [] }, source), null);
+  assert.equal(toItem({ text: 'x', claimReview: [{ url: 'https://a.fr', reviewDate: 'pas une date' }] }, source), null);
+});
+
+test('mergeItems dédoublonne, purge et trie', () => {
+  const now = new Date('2026-09-23T06:00:00Z');
+  const a = { id: 'a', reviewDate: '2026-09-20T00:00:00Z', v: 1 };
+  const aBis = { id: 'a', reviewDate: '2026-09-20T00:00:00Z', v: 2 };
+  const old = { id: 'o', reviewDate: '2026-06-01T00:00:00Z' };
+  const b = { id: 'b', reviewDate: '2026-09-22T00:00:00Z' };
+  const out = mergeItems([a, old], [aBis, b], { now, keepDays: 60 });
+  assert.deepEqual(out.map((x) => x.id), ['b', 'a']);
+  assert.equal(out[1].v, 2);
+});
+
+function fakeFetch(pages, calls) {
+  return async (url) => {
+    calls.push(url);
+    const u = new URL(url);
+    const site = u.searchParams.get('reviewPublisherSiteFilter');
+    if (site === 'panne.fr') return { ok: false, status: 503, text: async () => 'indisponible' };
+    const token = u.searchParams.get('pageToken') ?? '0';
+    const body = pages[site]?.[token] ?? {};
+    return { ok: true, json: async () => body };
+  };
+}
+
+test('collect : pagination, source en panne, fusion avec l\'historique', async () => {
+  const now = new Date('2026-09-23T06:00:00Z');
+  const sources = [source, { site: 'panne.fr', name: 'En panne', country: 'France', lang: 'fr' }];
+  const pages = {
+    'factuel.afp.com': {
+      0: { claims: [claim('https://factuel.afp.com/1', '2026-09-22T08:00:00Z')], nextPageToken: 'p2' },
+      p2: { claims: [claim('https://factuel.afp.com/2', '2026-09-21T08:00:00Z', 'Trompeur')] },
+    },
+  };
+  const calls = [];
+  const previous = { items: [{ id: 'ancien', reviewDate: '2026-09-10T00:00:00Z', site: 'factuel.afp.com' }] };
+  const feed = await collect({ key: 'K', sources, previous, now, fetchImpl: fakeFetch(pages, calls), log: () => {} });
+  assert.equal(feed.items.length, 3);
+  assert.deepEqual(feed.items.map((i) => i.verdict ?? '-'), ['faux', 'trompeur', 'autre']);
+  assert.ok(calls[0].includes('maxAgeDays=7'), 'mise à jour sur 7 jours quand l\'historique existe');
+  assert.equal(feed.sources[0].total, 3);
+  assert.ok(feed.sources[1].error);
+});
+
+test('collect : première collecte sur 60 jours, et échec total signalé', async () => {
+  const calls = [];
+  await collect({ key: 'K', sources: [source], previous: { demo: true, items: [{ id: 'd', reviewDate: new Date().toISOString() }] },
+    fetchImpl: fakeFetch({}, calls), log: () => {} });
+  assert.ok(calls[0].includes('maxAgeDays=60'));
+  await assert.rejects(collect({ key: 'K', sources: [{ site: 'panne.fr', name: 'x', country: 'France' }], previous: null,
+    fetchImpl: fakeFetch({}, []), log: () => {} }));
+});
+
+test('données réelles du 23/09 : verdicts anglais et thèmes', () => {
+  assert.equal(classifyVerdict('AI-generated'), 'faux');
+  assert.equal(classifyVerdict('Unsubstantiated'), 'faux');
+  assert.equal(classifyVerdict('Missing context'), 'trompeur');
+  assert.equal(classifyTheme('Video shows Indonesia volcanic eruption in Sept 2026'), 'Climat');
+  assert.equal(classifyTheme('Blast went off near a military base', 'Old footage of deadly blast'), 'International');
+  assert.equal(classifyTheme('La bande-annonce du prochain « Avengers »'), 'Culture & sport');
+  assert.equal(classifyTheme('Pakistan central bank announces discontinuation of 10-rupee banknotes'), 'Économie');
+  assert.equal(classifyTheme('Une erreur de syntaxe dans un vieux texte'), 'Divers');
+});
+
+test('collect : une nouvelle source est collectée sur 60 jours même avec un historique', async () => {
+  const calls = [];
+  const other = { site: 'tf1info.fr', name: 'TF1', country: 'France', lang: 'fr' };
+  const previous = { items: [{ id: 'x', reviewDate: new Date().toISOString(), site: 'factuel.afp.com', rating: 'Faux', claim: 'c' }] };
+  await collect({ key: 'K', sources: [source, other], previous, fetchImpl: fakeFetch({}, calls), log: () => {} });
+  assert.ok(calls[0].includes('maxAgeDays=7'));
+  assert.ok(calls[1].includes('maxAgeDays=60'));
+});

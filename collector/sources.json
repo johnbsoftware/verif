@@ -1,0 +1,13 @@
+{
+  "_lisezmoi": "Organismes interrogés chaque jour. Liste établie avec « npm run discover » le 23/09/2026 : seuls les éditeurs réellement recensés par Google Fact Check y figurent. Relancer npm run discover de temps en temps pour en découvrir de nouveaux.",
+  "sources": [
+    { "site": "factuel.afp.com", "name": "AFP Factuel", "country": "France", "lang": "fr" },
+    { "site": "tf1info.fr", "name": "Les Vérificateurs (TF1 Info)", "country": "France", "lang": "fr" },
+    { "site": "20minutes.fr", "name": "Fake Off (20 Minutes)", "country": "France", "lang": "fr" },
+    { "site": "poligraph.fr", "name": "Poligraph", "country": "France", "lang": "fr" },
+    { "site": "defacto-observatoire.fr", "name": "De Facto", "country": "France", "lang": "fr" },
+    { "site": "franceinfo.fr", "name": "Vrai ou Fake (franceinfo)", "country": "France", "lang": "fr" },
+    { "site": "beto.cd", "name": "Beto.cd", "country": "RD Congo", "lang": "fr" },
+    { "site": "factcheck.afp.com", "name": "AFP Fact Check", "country": "International", "lang": "en" }
+  ]
+}

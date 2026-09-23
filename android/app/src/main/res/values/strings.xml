@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Vérif</string>
+    <string name="title_activity_main">Vérif</string>
+    <string name="package_name">fr.johnbsoftware.verif</string>
+    <string name="custom_url_scheme">fr.johnbsoftware.verif</string>
+</resources>
