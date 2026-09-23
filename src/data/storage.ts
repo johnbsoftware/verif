@@ -4,7 +4,7 @@ import { Preferences } from '@capacitor/preferences';
 // miroir natif dans Preferences (qui survit au nettoyage du cache WebView),
 // restauré au démarrage par restoreFromNative().
 
-const KEYS = ['feed', 'saved', 'settings'] as const;
+const KEYS = ['feed', 'saved', 'settings', 'summaries'] as const;
 export type StoreKey = (typeof KEYS)[number];
 
 const prefix = 'verif.';
