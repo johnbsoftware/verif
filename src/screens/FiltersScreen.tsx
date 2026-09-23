@@ -31,7 +31,7 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
     <div className="screen">
       <header className="page-head">
         <h1 className="brand brand-sm">Filtres</h1>
-        <button className="link-btn" onClick={() => onChange({ ...settings, countries: [], themes: [], english: true })}>
+        <button className="link-btn" onClick={() => onChange({ ...settings, countries: [], themes: [], english: true, grouped: true })}>
           Réinitialiser
         </button>
       </header>
@@ -64,6 +64,19 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
                 <span className="muted small">{englishCount} dans le fil, surtout de l’AFP internationale</span>
               </span>
               <input type="checkbox" checked={settings.english} onChange={(e) => onChange({ ...settings, english: e.target.checked })} />
+            </label>
+          </div>
+        </section>
+
+        <section className="stack-8">
+          <h2 className="section-title">Affichage</h2>
+          <div className="group">
+            <label className="group-row tall">
+              <span className="stack-2">
+                Regrouper par sujet
+                <span className="muted small">Une seule carte quand plusieurs vérifications portent sur la même affirmation</span>
+              </span>
+              <input type="checkbox" checked={settings.grouped} onChange={(e) => onChange({ ...settings, grouped: e.target.checked })} />
             </label>
           </div>
         </section>

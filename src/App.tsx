@@ -13,8 +13,9 @@ import { SavedScreen } from './screens/SavedScreen';
 import { CheckScreen } from './screens/CheckScreen';
 import { onShared, takeShared, type SharedContent } from './lib/shareInbox';
 import { TabBar } from './components/TabBar';
+import { relatedIndex } from './data/groups';
 
-const DEFAULT_SETTINGS: Settings = { countries: [], themes: [], dailyDigest: false, english: true };
+const DEFAULT_SETTINGS: Settings = { countries: [], themes: [], dailyDigest: false, english: true, grouped: true };
 const COUNTRY_ORDER = ['France', 'Belgique', 'Suisse', 'Canada', 'Europe', 'International'];
 
 export default function App() {
@@ -103,6 +104,8 @@ export default function App() {
     save('saved', next);
   };
 
+  const related = useMemo(() => relatedIndex(feed?.items ?? []), [feed]);
+
   const allCountries = useMemo(() => {
     const set = new Set<string>([...(feed?.sources ?? []).map((s) => s.country), ...(feed?.items ?? []).map((i) => i.country)]);
     return [...set].sort((a, b) => {
@@ -152,6 +155,8 @@ export default function App() {
           saved={saved.some((s) => s.id === detail.id)}
           onBack={() => setDetail(null)}
           onToggleSave={toggleSave}
+          related={settings.grouped ? related.get(detail.id) ?? [] : []}
+          onOpen={setDetail}
         />
       )}
     </div>

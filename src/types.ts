@@ -49,6 +49,8 @@ export interface Settings {
   dailyDigest: boolean;
   /** Afficher aussi les vérifications rédigées en anglais. */
   english: boolean;
+  /** Une seule carte par sujet quand plusieurs vérifications portent sur la même affirmation. */
+  grouped: boolean;
 }
 
 export type Tab = 'feed' | 'check' | 'saved' | 'filters';

@@ -212,3 +212,5 @@ button:disabled { opacity: 0.55; cursor: default; }
 .tab { min-width: 64px; }
 
 .panel-summary { margin: 0; font-size: 16px; line-height: 1.55; color: var(--ink); padding-top: 10px; border-top: 1px solid var(--line-soft); }
+
+.card-more { font-size: 12px; color: var(--accent); font-weight: 500; }

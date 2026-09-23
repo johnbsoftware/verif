@@ -5,16 +5,19 @@ import { longDate } from '../lib/format';
 import { socialLabel } from '../data/social';
 import { openArticle, shareCheck } from '../lib/native';
 import { VerdictBadge } from '../components/VerdictBadge';
+import { ClaimCard } from '../components/ClaimCard';
 import { Back, Bookmark, External, ShareIcon } from '../components/Icons';
 
 interface Props {
+  related?: FactCheck[];
+  onOpen?: (it: FactCheck) => void;
   item: FactCheck;
   saved: boolean;
   onBack: () => void;
   onToggleSave: (it: FactCheck) => void;
 }
 
-export function DetailScreen({ item, saved, onBack, onToggleSave }: Props) {
+export function DetailScreen({ item, saved, onBack, onToggleSave, related = [], onOpen }: Props) {
   // Résumé : celui de la collecte, sinon celui déjà lu sur ce téléphone, sinon lecture de l'article.
   const initial = item.summary || cachedSummary(item.id) || null;
   const [summary, setSummary] = useState<string | null>(initial);
@@ -37,7 +40,7 @@ export function DetailScreen({ item, saved, onBack, onToggleSave }: Props) {
   }, [item]);
 
   return (
-    <div className="screen detail">
+    <div className="screen detail" key={item.id}>
       <header className="detail-head">
         <button className="back" onClick={onBack} aria-label="Retour">
           <Back /> Retour
@@ -95,6 +98,14 @@ export function DetailScreen({ item, saved, onBack, onToggleSave }: Props) {
             Le classement Faux / Trompeur / Vrai est une traduction automatique de sa conclusion.
           </p>
         </section>
+        {related.length > 0 && onOpen && (
+          <section className="stack-10">
+            <h2 className="section-title">Sur le même sujet · {related.length}</h2>
+            {related.map((r) => (
+              <ClaimCard key={r.id} item={r} onOpen={onOpen} />
+            ))}
+          </section>
+        )}
       </main>
     </div>
   );

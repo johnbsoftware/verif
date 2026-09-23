@@ -8,7 +8,15 @@ import { People } from './Icons';
 // Conclusions qui ne font que répéter le badge : inutile de les afficher en plus.
 const PLAIN = new Set(['faux', 'false', 'vrai', 'true', 'trompeur', 'misleading']);
 
-export function ClaimCard({ item, onOpen }: { item: FactCheck; onOpen: (it: FactCheck) => void }) {
+interface Props {
+  item: FactCheck;
+  onOpen: (it: FactCheck) => void;
+  /** Autres vérifications du même sujet (regroupées sous cette carte). */
+  others?: FactCheck[];
+}
+
+export function ClaimCard({ item, onOpen, others = [] }: Props) {
+  const otherPublishers = [...new Set(others.map((o) => o.publisher))].join(', ');
   const showRating = !!item.rating && !PLAIN.has(fold(item.rating).trim());
   const social = socialLabel(item);
   return (
@@ -25,6 +33,11 @@ export function ClaimCard({ item, onOpen }: { item: FactCheck; onOpen: (it: Fact
       <span className="card-meta">
         {item.theme === item.country ? item.country : `${item.country} · ${item.theme}`} · {item.publisher}
       </span>
+      {others.length > 0 && (
+        <span className="card-more">
+          + {others.length} {others.length > 1 ? 'autres vérifications' : 'autre vérification'} du même sujet · {otherPublishers}
+        </span>
+      )}
     </button>
   );
 }

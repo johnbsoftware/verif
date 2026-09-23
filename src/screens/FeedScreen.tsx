@@ -6,6 +6,7 @@ import { remoteConfigured } from '../data/feed';
 import { ClaimCard } from '../components/ClaimCard';
 import { Chevron, Close, Globe, People, Refresh, Search } from '../components/Icons';
 import { socialOf } from '../data/social';
+import { groupSimilar } from '../data/groups';
 import { THEMES } from '../config';
 
 const VERDICTS: { id: VerdictFilter; label: string }[] = [
@@ -42,7 +43,16 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, onOp
       ),
     [feed, settings, activeTheme, verdict, search, socialOnly],
   );
-  const groups = useMemo(() => groupByDay(items), [items]);
+  // Regroupement par sujet : une carte (la vérification « de tête ») par affirmation.
+  const subjects = useMemo(
+    () => (settings.grouped ? groupSimilar(items) : items.map((it) => ({ lead: it, others: [] as FactCheck[] }))),
+    [items, settings.grouped],
+  );
+  const othersOf = useMemo(() => new Map(subjects.map((g) => [g.lead.id, g.others])), [subjects]);
+  const groups = useMemo(
+    () => groupByDay(subjects.map((g) => g.lead).sort((a, b) => Date.parse(b.reviewDate) - Date.parse(a.reviewDate))),
+    [subjects],
+  );
 
   return (
     <div className="screen">
@@ -102,7 +112,7 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, onOp
         {notice && <p className="banner banner-soft">{notice}</p>}
         <div className="list-status">
           <span>
-            {feed ? `${plural(items.length, 'vérification', 'vérifications')} · données ${remoteConfigured() ? 'mises à jour' : 'collectées'} ${whenLabel(feed.generatedAt)}` : 'Chargement…'}
+            {feed ? `${settings.grouped && subjects.length < items.length ? `${plural(subjects.length, 'sujet', 'sujets')} (${items.length} vérif.)` : plural(items.length, 'vérification', 'vérifications')} · données ${remoteConfigured() ? 'mises à jour' : 'collectées'} ${whenLabel(feed.generatedAt)}` : 'Chargement…'}
           </span>
           {remoteConfigured() && (
             <button className="link-btn" onClick={onRefresh} disabled={loading} aria-label="Actualiser">
@@ -115,7 +125,7 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, onOp
           <section key={g.label} className="day">
             <h2 className="day-title">{g.label}</h2>
             {g.items.map((it) => (
-              <ClaimCard key={it.id} item={it} onOpen={onOpen} />
+              <ClaimCard key={it.id} item={it} onOpen={onOpen} others={othersOf.get(it.id)} />
             ))}
           </section>
         ))}
