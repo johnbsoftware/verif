@@ -70,6 +70,19 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
 
         <section className="stack-8">
           <h2 className="section-title">Affichage</h2>
+          <div className="segments segments-box" role="radiogroup" aria-label="Apparence">
+            {([['system', 'Système'], ['light', 'Clair'], ['dark', 'Sombre']] as const).map(([v, label]) => (
+              <button
+                key={v}
+                role="radio"
+                aria-checked={settings.theme === v}
+                className={`segment${settings.theme === v ? ' segment-on' : ''}`}
+                onClick={() => onChange({ ...settings, theme: v })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="group">
             <label className="group-row tall">
               <span className="stack-2">

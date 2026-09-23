@@ -51,6 +51,8 @@ export interface Settings {
   english: boolean;
   /** Une seule carte par sujet quand plusieurs vérifications portent sur la même affirmation. */
   grouped: boolean;
+  /** Apparence : suit le téléphone, ou forcée. */
+  theme: 'system' | 'light' | 'dark';
 }
 
 export type Tab = 'feed' | 'check' | 'saved' | 'filters';

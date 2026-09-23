@@ -15,7 +15,7 @@ import { onShared, takeShared, type SharedContent } from './lib/shareInbox';
 import { TabBar } from './components/TabBar';
 import { relatedIndex } from './data/groups';
 
-const DEFAULT_SETTINGS: Settings = { countries: [], themes: [], dailyDigest: false, english: true, grouped: true };
+const DEFAULT_SETTINGS: Settings = { countries: [], themes: [], dailyDigest: false, english: true, grouped: true, theme: 'system' };
 const COUNTRY_ORDER = ['France', 'Belgique', 'Suisse', 'Canada', 'Europe', 'International'];
 
 export default function App() {
@@ -86,6 +86,13 @@ export default function App() {
     });
     return () => { sub.then((h) => h.remove()); };
   }, []);
+
+  // Apparence choisie dans Filtres → Affichage.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.theme === 'system') delete root.dataset.theme;
+    else root.dataset.theme = settings.theme;
+  }, [settings.theme]);
 
   const updateSettings = (s: Settings) => {
     setSettings(s);

@@ -19,8 +19,9 @@
   color-scheme: light;
 }
 
+/* Sombre : automatique selon le téléphone, sauf choix « Clair » ; ou forcé par le choix « Sombre ». */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #151514;
     --surface: #1f1f1d;
     --sunken: #2a2a27;
@@ -38,6 +39,24 @@
     --autre-fg: #cfcdc5;  --autre-bg: #2a2a27;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #151514;
+  --surface: #1f1f1d;
+  --sunken: #2a2a27;
+  --ink: #eeede8;
+  --ink-2: #cfcdc5;
+  --muted: #a3a198;
+  --line: #34332f;
+  --line-soft: #2c2b28;
+  --pill-line: #3d3c37;
+  --accent: #8fb0e3;
+  --accent-ink: #10213d;
+  --faux-fg: #ffb4ab;   --faux-bg: #45160f;
+  --tromp-fg: #ffc58a;  --tromp-bg: #43270c;
+  --vrai-fg: #8fd9b0;   --vrai-bg: #0f3322;
+  --autre-fg: #cfcdc5;  --autre-bg: #2a2a27;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -214,3 +233,7 @@ button:disabled { opacity: 0.55; cursor: default; }
 .panel-summary { margin: 0; font-size: 16px; line-height: 1.55; color: var(--ink); padding-top: 10px; border-top: 1px solid var(--line-soft); }
 
 .card-more { font-size: 12px; color: var(--accent); font-weight: 500; }
+
+.segments-box { margin: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.segments-box .segment { border-bottom: none; }
+.segments-box .segment-on { background: var(--sunken); }
