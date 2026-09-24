@@ -13,6 +13,7 @@ interface ShareInboxPlugin {
   take(): Promise<SharedContent>;
   searchImage(options: { path: string }): Promise<{ via: 'lens' | 'google' | 'chooser' }>;
   readText(options: { path: string }): Promise<{ text: string }>;
+  pickImage(): Promise<SharedContent>;
   downloadImage(options: { url: string }): Promise<{ path: string; mimeType?: string }>;
   addListener(event: 'shareReceived', cb: () => void): Promise<PluginListenerHandle>;
 }
@@ -52,6 +53,18 @@ export async function readImageText(path: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Vrai sur Android : le bouton « Choisir une capture d'écran » est proposé. */
+export const canPickImage = available;
+
+/**
+ * Ouvre le sélecteur de photos d'Android. Retourne l'image choisie (copiée dans le cache,
+ * comme une image partagée), null si l'utilisateur annule. Lève une erreur si c'est impossible.
+ */
+export async function pickImage(): Promise<SharedContent | null> {
+  const s = await ShareInbox.pickImage();
+  return s?.imagePath ? s : null;
 }
 
 /**

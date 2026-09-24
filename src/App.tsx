@@ -180,7 +180,7 @@ export default function App() {
           />
         </div>
         <div className="tab-panel" hidden={tab !== 'check'}>
-          <CheckScreen feed={feed} shared={shared} onClearShared={() => setShared(null)} onOpen={openDetail} />
+          <CheckScreen feed={feed} shared={shared} onClearShared={() => setShared(null)} onPicked={setShared} onOpen={openDetail} />
         </div>
         <div className="tab-panel" hidden={tab !== 'saved'}>
           <SavedScreen items={saved} onOpen={openDetail} />

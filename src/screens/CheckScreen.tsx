@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FactCheck, Feed } from '../types';
 import type { SharedContent } from '../lib/shareInbox';
-import { downloadImage, localImageSrc, readImageText, searchImageWithLens } from '../lib/shareInbox';
+import { canPickImage, downloadImage, localImageSrc, pickImage, readImageText, searchImageWithLens } from '../lib/shareInbox';
 import { openArticle } from '../lib/native';
 import { lensUrlFor, previewAvailable, previewLink, type LinkPreview } from '../lib/linkPreview';
 import { cleanOcrText, extractUrls, factCheckExplorerUrl, findMatches, suggestedQuery, webSearchUrl } from '../data/match';
 import { ClaimCard } from '../components/ClaimCard';
-import { Close, External, Search } from '../components/Icons';
+import { Close, External, ImageIcon, Search } from '../components/Icons';
 
 interface Props {
   feed: Feed | null;
   shared: SharedContent | null;
   onClearShared: () => void;
+  /** Image choisie dans la galerie : traitée comme une image partagée. */
+  onPicked: (s: SharedContent) => void;
   onOpen: (it: FactCheck) => void;
 }
 
@@ -19,7 +21,7 @@ const hostOf = (u: string) => {
   try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; }
 };
 
-export function CheckScreen({ feed, shared, onClearShared, onOpen }: Props) {
+export function CheckScreen({ feed, shared, onClearShared, onPicked, onOpen }: Props) {
   const sharedText = [shared?.subject, shared?.text].filter(Boolean).join(' ');
   const [query, setQuery] = useState('');
   const [submitted, setSubmitted] = useState('');
@@ -28,6 +30,16 @@ export function CheckScreen({ feed, shared, onClearShared, onOpen }: Props) {
   /** Image du post téléchargée sur le téléphone (lecture du texte, Google Lens). */
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const choose = async () => {
+    setPickError(null);
+    try {
+      const s = await pickImage();
+      if (s) onPicked(s);
+    } catch {
+      setPickError("Impossible d'ouvrir la galerie sur ce téléphone.");
+    }
+  };
   const [ocr, setOcr] = useState<'idle' | 'reading' | 'found' | 'empty' | 'failed'>('idle');
 
   const links = extractUrls(sharedText);
@@ -134,8 +146,17 @@ export function CheckScreen({ feed, shared, onClearShared, onOpen }: Props) {
         {!shared && (
           <p className="intro">
             Un post vous paraît douteux ? Dans Facebook, TikTok, X ou WhatsApp, touchez <strong>Partager</strong> puis <strong>Vérif</strong>.
-            Vous pouvez aussi coller son texte ci-dessous.
+            Vous pouvez aussi {canPickImage ? 'choisir une capture d’écran ou ' : ''}coller son texte ci-dessous.
           </p>
+        )}
+
+        {canPickImage && (
+          <div className="stack-8">
+            <button className="secondary" onClick={choose}>
+              <ImageIcon /> {shared?.imagePath ? 'Choisir une autre image' : "Choisir une capture d'écran"}
+            </button>
+            {pickError && <p className="banner banner-soft">{pickError}</p>}
+          </div>
         )}
 
         {shared?.imagePath && (

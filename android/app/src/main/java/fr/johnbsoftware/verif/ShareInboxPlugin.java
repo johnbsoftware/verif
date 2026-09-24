@@ -1,5 +1,6 @@
 package fr.johnbsoftware.verif;
 
+import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Context;
@@ -9,8 +10,10 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
+import androidx.activity.result.ActivityResult;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
 import com.google.mlkit.vision.common.InputImage;
@@ -20,6 +23,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -96,6 +100,49 @@ public class ShareInboxPlugin extends Plugin {
                 call.reject("Lecture du texte impossible", e);
                 recognizer.close();
             });
+    }
+
+    /**
+     * Ouvre le sélecteur de photos d'Android (sans autorisation d'accès à la galerie) et copie
+     * l'image choisie dans le cache, comme une image partagée. Annulé : résultat vide.
+     */
+    @PluginMethod
+    public void pickImage(PluginCall call) {
+        Intent intent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
+            intent.setType("image/*");
+        } else {
+            intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("image/*");
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+        }
+        try {
+            startActivityForResult(call, intent, "pickImageResult");
+        } catch (Exception e) {
+            Log.e(TAG, "pickImage", e);
+            call.reject("Impossible d'ouvrir la galerie", e);
+        }
+    }
+
+    @ActivityCallback
+    private void pickImageResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        Intent data = result.getData();
+        Uri uri = data != null ? data.getData() : null;
+        if (result.getResultCode() != Activity.RESULT_OK || uri == null) {
+            call.resolve(new JSObject()); // choix annulé
+            return;
+        }
+        String type = null;
+        try { type = getContext().getContentResolver().getType(uri); } catch (Exception ignored) { }
+        if (type == null || !type.startsWith("image/")) type = "image/jpeg";
+        String path = copyToCache(uri, type);
+        if (path == null) {
+            call.reject("Image illisible ou trop lourde");
+            return;
+        }
+        call.resolve(new JSObject().put("imagePath", path).put("mimeType", type));
     }
 
     /**

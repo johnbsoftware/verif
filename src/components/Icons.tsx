@@ -26,4 +26,7 @@ export const Inspect = ({ size = 22 }: P) => (
 export const People = ({ size = 14 }: P) => (
   <svg {...base(size)}><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.6-3 2.8-5 5.5-5s4.9 2 5.5 5M16 5.5a3 3 0 0 1 0 5.5M17.5 14c1.7.6 2.8 2.4 3 5" /></svg>
 );
+export const ImageIcon = ({ size = 18 }: P) => (
+  <svg {...base(size)}><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.8" /><path d="M20.5 16l-5-5-8.5 8.5" /></svg>
+);
 export const Refresh = ({ size = 16 }: P) => <svg {...base(size)}><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>;
