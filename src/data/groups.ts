@@ -9,7 +9,7 @@ import { keywords } from './match';
 const MAX_GAP_MS = 21 * 86_400_000;
 
 // Dates, mois et mots de circonstance ne suffisent pas à dire « même affirmation ».
-const NOISE = /^((19|20)\d\d|janv|fevr|mars|avri|avril|mai|juin|juil|aout|sept|octo|nove|dece|janua|febr|march|april|june|july|augu|recen|actua|genui|real|dernie|nouve|foota|clip|falsel|false|linke|misle|misre|onlin|circu|fake|fabri|faux|fauss|atten|tromp|decon|conte|sorti|gener|artif|altere|manip|monta|trugu|deadl|dead|catas|disas|cause|trigg|after|aftermath)$/;
+const NOISE = /^((19|20)\d\d|janv|fevr|mars|avri|avril|mai|juin|juil|aout|sept|octo|nove|dece|janua|febr|march|april|june|july|augu|recen|actua|genui|real|dernie|nouve|foota|clip|falsel|false|linke|misle|misre|onlin|circu|fake|fabri|faux|fauss|atten|tromp|decon|conte|sorti|gener|artif|altere|manip|monta|truqu|deadl|dead|catas|disas|cause|trigg|after|aftermath)$/;
 // Mots de vérification courants (« falsely linked », « misleads online », « attention à »…) : sans valeur ici.
 
 function stems(it: FactCheck): Set<string> {

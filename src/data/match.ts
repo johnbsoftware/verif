@@ -38,20 +38,35 @@ export interface Match {
   score: number;
 }
 
+/**
+ * Seuil de mots communs. Il dépend du plus court des deux textes : un post long qui contient
+ * l'affirmation vérifiée (« Partagez avant suppression ! … ») doit la retrouver, alors qu'un
+ * seuil calculé sur le seul texte partagé dépasserait le nombre de mots de la vérification.
+ */
+function needed(keys: number, stems: number): number {
+  const fromKeys = keys <= 2 ? keys : Math.max(2, Math.ceil(keys * 0.25));
+  // Texte partagé long : au moins 3 mots communs, pour éviter les rapprochements fortuits.
+  const fromStems = Math.max(keys > 8 ? 3 : 2, Math.ceil(stems * 0.5));
+  return Math.min(fromKeys, fromStems);
+}
+
 export function findMatches(text: string, items: FactCheck[], limit = 8): Match[] {
   const keys = keywords(text);
   if (!keys.length) return [];
-  const need = keys.length <= 2 ? keys.length : Math.max(2, Math.ceil(keys.length * 0.25));
-  const out: Match[] = [];
+  const scored: (Match & { cover: number })[] = [];
   for (const item of items) {
     const stems = new Set(keywords(`${item.claim} ${item.title ?? ''}`));
+    if (!stems.size) continue;
     let score = 0;
     for (const k of keys) if (stems.has(k)) score++;
-    if (score >= need) out.push({ item, score });
+    if (score >= needed(keys.length, stems.size)) {
+      scored.push({ item, score, cover: score / Math.min(keys.length, stems.size) });
+    }
   }
-  return out
-    .sort((a, b) => b.score - a.score || Date.parse(b.item.reviewDate) - Date.parse(a.item.reviewDate))
-    .slice(0, limit);
+  return scored
+    .sort((a, b) => b.cover - a.cover || b.score - a.score || Date.parse(b.item.reviewDate) - Date.parse(a.item.reviewDate))
+    .slice(0, limit)
+    .map(({ item, score }) => ({ item, score }));
 }
 
 /** Texte de recherche proposé : le texte partagé sans les liens, raccourci. */

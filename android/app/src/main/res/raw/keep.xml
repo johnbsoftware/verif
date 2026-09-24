@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Réduction des ressources (shrinkResources) : ressources utilisées par nom par Capacitor ou le système. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/splash,@drawable/ic_stat_verif,@mipmap/ic_launcher*,@drawable/ic_launcher*,@xml/config,@xml/file_paths,@layout/activity_main" />

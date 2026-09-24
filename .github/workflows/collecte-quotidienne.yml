@@ -4,6 +4,11 @@
 #      Nom : FACTCHECK_API_KEY   Valeur : votre clé Google Fact Check Tools
 #   2. Settings > Pages > Build and deployment > Source : « GitHub Actions »
 # Le flux est ensuite servi à : https://<pseudo>.github.io/<dépôt>/feed.json
+# Les pages du dossier pages/ (politique de confidentialité…) sont publiées à côté.
+#
+# GitHub désactive les tâches planifiées d'un dépôt public resté 60 jours sans commit.
+# La dernière étape enregistre donc une date dans .github/derniere-activite.txt quand
+# le dernier commit a plus de 45 jours (un petit commit automatique toutes les 6 semaines).
 
 name: Collecte quotidienne
 
@@ -13,7 +18,7 @@ on:
   workflow_dispatch:       # bouton « Run workflow » pour lancer à la main
 
 permissions:
-  contents: read
+  contents: write   # commit de maintien (voir plus haut)
   pages: write
   id-token: write
 
@@ -37,6 +42,9 @@ jobs:
       - name: Tests du collecteur
         run: node --test collector/collector.test.mjs
 
+      - name: Pages statiques
+        run: mkdir -p site && cp -r pages/. site/
+
       - name: Collecte
         env:
           FACTCHECK_API_KEY: ${{ secrets.FACTCHECK_API_KEY }}
@@ -51,3 +59,18 @@ jobs:
 
       - id: deploiement
         uses: actions/deploy-pages@v4
+
+      - name: Maintien de la collecte (commit si le dépôt est inactif depuis 45 jours)
+        if: github.event_name == 'schedule'
+        run: |
+          last=$(git log -1 --format=%ct)
+          age=$(( ( $(date +%s) - last ) / 86400 ))
+          echo "Dernier commit il y a $age jours"
+          if [ "$age" -ge 45 ]; then
+            date -u +%F > .github/derniere-activite.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+            git add .github/derniere-activite.txt
+            git commit -m "Maintien de la collecte quotidienne"
+            git push
+          fi

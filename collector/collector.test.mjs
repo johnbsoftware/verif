@@ -22,7 +22,7 @@ test('verdicts : les pièges d\'ordre', () => {
 test('thèmes', () => {
   assert.equal(classifyTheme('Ce vaccin contre la grippe provoquerait un cancer'), 'Santé');
   assert.equal(classifyTheme('Le président a annoncé une hausse des impôts et de la retraite'), 'Économie');
-  assert.equal(classifyTheme('Des images d’inondation attribuées au réchauffement'), 'Climat');
+  assert.equal(classifyTheme('Des images d’inondation attribuées au réchauffement'), 'Climat & catastrophes');
   assert.equal(classifyTheme('Une vidéo montre des missiles tirés sur l’Ukraine'), 'International');
   assert.equal(classifyTheme('Un chat qui joue du piano'), 'Divers');
 });
@@ -101,7 +101,7 @@ test('données réelles du 23/09 : verdicts anglais et thèmes', () => {
   assert.equal(classifyVerdict('AI-generated'), 'faux');
   assert.equal(classifyVerdict('Unsubstantiated'), 'faux');
   assert.equal(classifyVerdict('Missing context'), 'trompeur');
-  assert.equal(classifyTheme('Video shows Indonesia volcanic eruption in Sept 2026'), 'Climat');
+  assert.equal(classifyTheme('Video shows Indonesia volcanic eruption in Sept 2026'), 'Climat & catastrophes');
   assert.equal(classifyTheme('Blast went off near a military base', 'Old footage of deadly blast'), 'International');
   assert.equal(classifyTheme('La bande-annonce du prochain « Avengers »'), 'Culture & sport');
   assert.equal(classifyTheme('Pakistan central bank announces discontinuation of 10-rupee banknotes'), 'Économie');
@@ -177,4 +177,35 @@ test('résumés v2 : les échecs de la version 1 sont retentés une fois', async
   await addSummaries(items, { fetchImpl: async (u) => { calls.push(u); return { ok: false, status: 403 }; }, log: () => {} });
   assert.deepEqual(calls, ['https://s/a']);
   assert.equal(items[0].summaryV, 2);
+});
+
+test('verdicts : les négations ne sont jamais classées vraies', () => {
+  const cases = {
+    'Pas vrai': 'faux', 'Ce n’est pas vrai': 'faux', "Ce n'est pas le cas": 'faux', 'Non avéré': 'faux',
+    'Non confirmé': 'faux', 'Non fondé': 'faux', 'Pas exact': 'faux', 'Not true': 'faux', 'Not correct': 'faux',
+    'Not accurate': 'faux', 'Pas du tout vrai': 'faux', "Isn't true": 'faux',
+    'Partly false': 'trompeur', 'Partially true': 'trompeur', 'Mostly false': 'trompeur',
+    'Pas tout à fait vrai': 'trompeur', 'Plutôt vrai': 'vrai', 'Vrai': 'vrai', 'Exact': 'vrai',
+  };
+  for (const [rating, expected] of Object.entries(cases)) assert.equal(classifyVerdict(rating), expected, rating);
+});
+
+import { isTransient } from './collect.mjs';
+
+test('résumés : une panne passagère est retentée (3 essais au plus), un refus est définitif', async () => {
+  assert.ok(isTransient('délai dépassé') && isTransient('erreur réseau') && isTransient('HTTP 503') && isTransient('HTTP 429'));
+  assert.ok(!isTransient('HTTP 403') && !isTransient('aucun résumé dans la page'));
+  const it = { id: 'a', site: 's', url: 'https://s/a', title: 't' };
+  const down = async () => { throw new TypeError('fetch failed'); };
+  await addSummaries([it], { fetchImpl: down, log: () => {} });
+  assert.equal(it.summary, undefined);
+  assert.equal(it.summaryTries, 1);
+  await addSummaries([it], { fetchImpl: down, log: () => {} });
+  assert.equal(it.summaryTries, 2);
+  await addSummaries([it], { fetchImpl: down, log: () => {} });
+  assert.equal(it.summary, null, 'abandon après le 3e essai');
+  assert.equal(it.summaryTries, undefined);
+  const refused = { id: 'b', site: 's', url: 'https://s/b', title: 't' };
+  await addSummaries([refused], { fetchImpl: async () => ({ ok: false, status: 403 }), log: () => {} });
+  assert.equal(refused.summary, null);
 });

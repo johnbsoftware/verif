@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import type { FactCheck, Feed, Settings } from '../types';
 import { applyFilters, countriesLabel, groupByDay, type VerdictFilter } from '../data/filters';
 import { plural, todayLabel, whenLabel } from '../lib/format';
-import { remoteConfigured } from '../data/feed';
+import { isStale, remoteConfigured } from '../data/feed';
 import { ClaimCard } from '../components/ClaimCard';
 import { Chevron, Close, Globe, People, Refresh, Search } from '../components/Icons';
 import { socialOf } from '../data/social';
@@ -22,26 +22,31 @@ interface Props {
   allCountries: string[];
   loading: boolean;
   notice: string | null;
+  /** Vérifications arrivées avec la dernière collecte (repère « Nouveau »). */
+  freshIds: Set<string>;
   onOpen: (it: FactCheck) => void;
   onOpenFilters: () => void;
   onRefresh: () => void;
 }
 
-export function FeedScreen({ feed, settings, allCountries, loading, notice, onOpen, onOpenFilters, onRefresh }: Props) {
+export function FeedScreen({ feed, settings, allCountries, loading, notice, freshIds, onOpen, onOpenFilters, onRefresh }: Props) {
   const [theme, setTheme] = useState('Tout');
   const [verdict, setVerdict] = useState<VerdictFilter>('tous');
   const [search, setSearch] = useState('');
   const [socialOnly, setSocialOnly] = useState(false);
+  // Le filtrage et le regroupement suivent la frappe sans la ralentir : React les recalcule
+  // en arrière-plan, le champ de recherche reste fluide.
+  const deferredSearch = useDeferredValue(search);
 
   const themeChips = ['Tout', ...(settings.themes.length ? THEMES.filter((t) => settings.themes.includes(t)) : THEMES)];
   const activeTheme = themeChips.includes(theme) ? theme : 'Tout';
 
   const items = useMemo(
     () =>
-      applyFilters(feed?.items ?? [], { settings, theme: activeTheme, verdict, search }).filter(
+      applyFilters(feed?.items ?? [], { settings, theme: activeTheme, verdict, search: deferredSearch }).filter(
         (it) => !socialOnly || socialOf(it).social,
       ),
-    [feed, settings, activeTheme, verdict, search, socialOnly],
+    [feed, settings, activeTheme, verdict, deferredSearch, socialOnly],
   );
   // Regroupement par sujet : une carte (la vérification « de tête ») par affirmation.
   const subjects = useMemo(
@@ -49,6 +54,14 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, onOp
     [items, settings.grouped],
   );
   const othersOf = useMemo(() => new Map(subjects.map((g) => [g.lead.id, g.others])), [subjects]);
+  // Un sujet est « nouveau » si l'une de ses vérifications l'est.
+  const freshCount = useMemo(
+    () => subjects.filter((g) => freshIds.has(g.lead.id) || g.others.some((o) => freshIds.has(o.id))).length,
+    [subjects, freshIds],
+  );
+  const isFresh = (it: FactCheck) => freshIds.has(it.id) || (othersOf.get(it.id) ?? []).some((o) => freshIds.has(o.id));
+  const stale = isStale(feed);
+
   const groups = useMemo(
     () => groupByDay(subjects.map((g) => g.lead).sort((a, b) => Date.parse(b.reviewDate) - Date.parse(a.reviewDate))),
     [subjects],
@@ -109,10 +122,17 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, onOp
         {feed?.demo && (
           <p className="banner">Données de démonstration. Les vraies vérifications apparaîtront une fois le flux quotidien configuré.</p>
         )}
+        {stale && feed && (
+          <p className="banner">
+            Aucune nouvelle collecte depuis {whenLabel(feed.generatedAt)} : la mise à jour quotidienne semble arrêtée.
+            Les vérifications affichées ne sont plus à jour.
+          </p>
+        )}
         {notice && <p className="banner banner-soft">{notice}</p>}
         <div className="list-status">
           <span>
             {feed ? `${settings.grouped && subjects.length < items.length ? `${plural(subjects.length, 'sujet', 'sujets')} (${items.length} vérif.)` : plural(items.length, 'vérification', 'vérifications')} · données ${remoteConfigured() ? 'mises à jour' : 'collectées'} ${whenLabel(feed.generatedAt)}` : 'Chargement…'}
+            {freshCount > 0 && <span className="fresh-count"> · {plural(freshCount, 'nouveau', 'nouveaux')}</span>}
           </span>
           {remoteConfigured() && (
             <button className="link-btn" onClick={onRefresh} disabled={loading} aria-label="Actualiser">
@@ -125,7 +145,7 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, onOp
           <section key={g.label} className="day">
             <h2 className="day-title">{g.label}</h2>
             {g.items.map((it) => (
-              <ClaimCard key={it.id} item={it} onOpen={onOpen} others={othersOf.get(it.id)} />
+              <ClaimCard key={it.id} item={it} onOpen={onOpen} others={othersOf.get(it.id)} fresh={isFresh(it)} />
             ))}
           </section>
         ))}

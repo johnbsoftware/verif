@@ -1,5 +1,9 @@
+import { useEffect, useState } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import type { Feed, Settings } from '../types';
-import { THEMES } from '../config';
+import { PRIVACY_URL, THEMES } from '../config';
+import { isNative, openArticle } from '../lib/native';
+import { External } from '../components/Icons';
 import { plural, whenLabel } from '../lib/format';
 import { remoteConfigured } from '../data/feed';
 import { isFrench } from '../data/filters';
@@ -22,6 +26,11 @@ function toggle(list: string[], value: string, universe: string[]): string[] {
 }
 
 export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest, onDone }: Props) {
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    if (isNative) CapApp.getInfo().then((i) => setVersion(`${i.version} (${i.build})`)).catch(() => {});
+  }, []);
+
   const countryOn = (c: string) => !settings.countries.length || settings.countries.includes(c);
   const themeOn = (t: string) => !settings.themes.length || settings.themes.includes(t);
   const englishCount = feed?.items.filter((i) => !isFrench(i)).length ?? 0;
@@ -116,7 +125,9 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
             <label className="group-row tall">
               <span className="stack-2">
                 Rappel quotidien
-                <span className="muted small">Notification chaque matin à 7 h 00</span>
+                <span className="muted small">
+                  Vers 7 h 30, seulement s'il y a de nouvelles vérifications dans vos pays et thèmes
+                </span>
               </span>
               <input type="checkbox" checked={settings.dailyDigest} onChange={(e) => onDigest(e.target.checked)} />
             </label>
@@ -146,6 +157,25 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
             <p className="muted small">Données : Google Fact Check Tools (ClaimReview).</p>
           </section>
         )}
+
+        <section className="stack-8">
+          <h2 className="section-title">À propos</h2>
+          <div className="group">
+            <button className="group-row about-row" onClick={() => openArticle(PRIVACY_URL)}>
+              <span className="stack-2">
+                Confidentialité
+                <span className="muted small">Vérif ne collecte aucune donnée personnelle</span>
+              </span>
+              <External />
+            </button>
+            {version && (
+              <div className="group-row">
+                <span>Version</span>
+                <span className="muted small">{version}</span>
+              </div>
+            )}
+          </div>
+        </section>
       </main>
 
       <div className="footer-action">

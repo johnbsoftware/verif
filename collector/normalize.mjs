@@ -22,7 +22,7 @@ const MISLEADING = [
   /out of context/, /partiel/, /en partie/, /exager/, /imprecis/, /nuanc/, /approximati/,
   /mitig/, /\bmixed\b/, /half/, /plutot faux/, /pas tout a fait/, /incomplet/, /ambigu/,
   /premature/, /survendu/, /\bdetourne/, /\bvrai,? mais\b/, /missing context/, /needs context/,
-  /\bunproven\b/, /non prouve/, /pas prouve/, /a relativiser/,
+  /\bunproven\b/, /non prouve/, /pas prouve/, /a relativiser/, /\bpartly\b/, /\bpartially\b/, /mostly false/,
 ];
 const FALSE = [
   /\bfaux\b/, /\bfausse/, /\bfake\b/, /\bfalse\b/, /infonde/, /inexact/, /errone/, /\bintox/,
@@ -31,6 +31,10 @@ const FALSE = [
   /\bscam\b/, /\bfabricated\b/, /altered/, /\bnon,/, /\bnon\b$/, /\bwrong\b/,
   /\bai[- ]generated/, /\bai[- ]manipulated/, /unsubstantiated/, /baseless/, /no evidence/, /aucune preuve/,
 ];
+// Négation d'un mot positif (« Pas vrai », « Non avéré », « Not true »…) : à tester avant TRUE,
+// sinon « vrai » / « true » / « avéré » l'emporteraient.
+const NEGATED_TRUE =
+  /\b(pas|non|not|isn t|nullement|aucunement)\b\s*(du tout\s*|vraiment\s*|entierement\s*|totalement\s*)?(vrai|true|correct|exact|avere|fonde|confirme|accurate|le cas|verifie)/;
 const TRUE = [
   /\bvrai/, /\btrue\b/, /\bcorrect/, /\bexact/, /confirme/, /avere/, /\bfonde/, /accurate/, /\boui\b/,
 ];
@@ -42,6 +46,7 @@ export function classifyVerdict(textualRating) {
   if (/satir|parodi|humour/.test(r)) return 'autre';
   if (MISLEADING.some((re) => re.test(r))) return 'trompeur';
   if (FALSE.some((re) => re.test(r))) return 'faux';
+  if (NEGATED_TRUE.test(r)) return 'faux';
   if (TRUE.some((re) => re.test(r))) return 'vrai';
   return 'autre';
 }
@@ -62,7 +67,7 @@ const THEMES = {
     'democrat', 'republican', 'midterm', 'senator', 'government', 'leader', 'summit', 'sommet', 'brics', 'duterte',
     'loi ', 'law ', 'reglement europeen', 'union europeenne', 'visa', 'ballot', 'campagne electorale', 'campaign',
     'opposition'],
-  'Climat': ['climat', 'rechauffement', 'co2', 'carbone', 'inondation', 'crue', 'secheresse', 'canicule',
+  'Climat & catastrophes': ['climat', 'rechauffement', 'co2', 'carbone', 'inondation', 'crue', 'secheresse', 'canicule',
     'incendie', 'feu de foret', 'meteo', 'ouragan', 'cyclone', 'tempete', 'environnement', 'pollution', 'glacier',
     'eolien', 'nucleaire', 'temperature', 'chemtrail', 'geoingenierie', 'haarp', 'volcan', 'eruption', 'seisme',
     'tremblement de terre', 'avalanche', 'glissement de terrain', 'climate', 'wildfire', 'forest fire', 'flood',

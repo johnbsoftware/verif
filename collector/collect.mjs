@@ -99,6 +99,10 @@ export async function fetchSummary(item, fetchImpl) {
   }
 }
 
+const MAX_SUMMARY_TRIES = 3;
+/** Échec qui mérite une nouvelle tentative : délai, réseau, erreur serveur ou limitation (429). */
+export const isTransient = (reason) => reason === 'délai dépassé' || reason === 'erreur réseau' || /^HTTP (5\d\d|429|408)$/.test(reason);
+
 const needsSummary = (it) => it.summary === undefined || (it.summary === null && (it.summaryV ?? 1) < SUMMARY_VERSION);
 
 /**
@@ -117,8 +121,15 @@ export async function addSummaries(items, { fetchImpl = fetch, log = console.log
     while (todo.length && Date.now() - start < budgetMs) {
       const it = todo.shift();
       const { summary, reason } = await fetchSummary(it, fetchImpl);
-      it.summary = summary;
-      it.summaryV = SUMMARY_VERSION;
+      if (!summary && isTransient(reason) && (it.summaryTries ?? 0) + 1 < MAX_SUMMARY_TRIES) {
+        // Panne passagère (délai, réseau, serveur saturé) : on retentera à la prochaine collecte.
+        it.summaryTries = (it.summaryTries ?? 0) + 1;
+        delete it.summary;
+      } else {
+        it.summary = summary;
+        it.summaryV = SUMMARY_VERSION;
+        delete it.summaryTries;
+      }
       done++;
       if (summary) found++;
       const st = bySite.get(it.site) ?? { ok: 0, total: 0, reasons: {} };

@@ -12,7 +12,17 @@ import { hostOf } from './normalize.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const API = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 const QUERIES = ['faux', 'vidéo', 'photo', 'image', 'vaccin', 'guerre', 'climat', 'élection', 'gouvernement',
-  'président', 'prix', 'police', 'Ukraine', 'Israël', 'immigration', 'santé', 'intelligence artificielle', 'France'];
+  'président', 'prix', 'police', 'Ukraine', 'Israël', 'immigration', 'santé', 'intelligence artificielle', 'France',
+  // Francophonie : médias belges (RTBF Faky, Le Soir), suisses (RTS), québécois (Radio-Canada Décrypteurs), africains.
+  'Belgique', 'Bruxelles', 'Wallonie', 'Suisse', 'Genève', 'Québec', 'Canada', 'Sénégal', "Côte d'Ivoire", 'Cameroun',
+  'Maroc', 'Algérie', 'Tunisie', 'Afrique', 'Europe', 'Russie', 'TikTok', 'Facebook', 'arnaque', 'montage', 'intox'];
+
+/** Pays probable d'après l'extension du site (à vérifier avant d'ajouter la source). */
+function countryOf(site) {
+  const tld = site.split('.').pop();
+  return { fr: 'France', be: 'Belgique', ch: 'Suisse', ca: 'Canada', sn: 'Sénégal', ci: "Côte d'Ivoire", cm: 'Cameroun',
+    ma: 'Maroc', dz: 'Algérie', tn: 'Tunisie', cd: 'RD Congo', bf: 'Burkina Faso', ml: 'Mali', lu: 'Luxembourg' }[tld] ?? 'International';
+}
 const MAX_AGE_DAYS = 90;
 
 const { key, problem } = await readKey();
@@ -50,4 +60,13 @@ console.log(`\n\nÉditeurs trouvés en français sur ${MAX_AGE_DAYS} jours (* = 
 for (const [site, e] of rows) {
   console.log(`${known.has(site) ? '*' : ' '} ${String(e.urls.size).padStart(4)}  ${site.padEnd(30)} ${e.name}`);
 }
-console.log('\nPour en ajouter un : copiez son site exact dans collector/sources.json, puis npm run collect.');
+const fresh = rows.filter(([site, e]) => !known.has(site) && e.urls.size >= 2);
+if (fresh.length) {
+  console.log('\nNouveaux éditeurs (au moins 2 vérifications) — lignes prêtes à coller dans collector/sources.json :\n');
+  for (const [site, e] of fresh) {
+    console.log(`    ${JSON.stringify({ site, name: e.name, country: countryOf(site), lang: 'fr' })},`);
+  }
+  console.log('\nVérifiez le nom et le pays, collez les lignes voulues dans "sources", puis npm run collect.');
+} else {
+  console.log('\nAucun nouvel éditeur francophone : sources.json est à jour.');
+}

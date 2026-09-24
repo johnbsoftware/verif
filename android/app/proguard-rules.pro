@@ -19,3 +19,13 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# --- Vérif ---
+# Plugins maison (appelés par leur nom depuis la page) et tâche WorkManager (instanciée par réflexion).
+-keep class fr.johnbsoftware.verif.** { *; }
+-keep class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+# Capacitor : le pont JavaScript appelle les méthodes des plugins par réflexion.
+-keep class com.getcapacitor.** { *; }
+-keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod

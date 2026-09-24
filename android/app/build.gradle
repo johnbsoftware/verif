@@ -7,8 +7,8 @@ android {
         applicationId "fr.johnbsoftware.verif"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 11
-        versionName "1.1.1"
+        versionCode 12
+        versionName "1.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -18,7 +18,10 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled false
+            // R8 : code et ressources inutilisés retirés (APK plus léger). Règles dans proguard-rules.pro.
+            // En cas de souci dans l'APK de publication uniquement : repasser les deux à false.
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -44,6 +47,8 @@ dependencies {
     // Version « services Google Play » : le modèle n'est pas dans l'APK, Google Play le
     // télécharge une fois (voir la balise meta-data « ocr » dans AndroidManifest.xml).
     implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
+    // Vérif : rappel quotidien en arrière-plan (DigestWorker).
+    implementation 'androidx.work:work-runtime:2.10.0'
 }
 
 apply from: 'capacitor.build.gradle'

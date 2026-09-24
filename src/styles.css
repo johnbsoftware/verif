@@ -237,3 +237,15 @@ button:disabled { opacity: 0.55; cursor: default; }
 .segments-box { margin: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); }
 .segments-box .segment { border-bottom: none; }
 .segments-box .segment-on { background: var(--sunken); }
+
+/* Nouveautés, flux en panne, À propos (1.2.0) */
+.tag-new {
+  padding: 1px 7px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); font-weight: 600;
+}
+.fresh-count { color: var(--accent); font-weight: 600; }
+.about-row { color: var(--ink); text-align: left; width: 100%; background: none; }
+.about-row:active { background: var(--sunken); }
+/* Écrans étroits : les repères (verdict, Nouveau, réseau) passent à la ligne plutôt que de déborder. */
+.card-top { gap: 8px; }
+.card-top > .row { flex-wrap: wrap; row-gap: 4px; min-width: 0; }

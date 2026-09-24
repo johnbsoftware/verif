@@ -14,10 +14,12 @@ interface Props {
   item: FactCheck;
   saved: boolean;
   onBack: () => void;
+  /** « Retour » vers la liste, ou « Précédent » après « Sur le même sujet ». */
+  backLabel?: string;
   onToggleSave: (it: FactCheck) => void;
 }
 
-export function DetailScreen({ item, saved, onBack, onToggleSave, related = [], onOpen }: Props) {
+export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onToggleSave, related = [], onOpen }: Props) {
   // Résumé : celui de la collecte, sinon celui déjà lu sur ce téléphone, sinon lecture de l'article.
   const initial = item.summary || cachedSummary(item.id) || null;
   const [summary, setSummary] = useState<string | null>(initial);
@@ -26,6 +28,9 @@ export function DetailScreen({ item, saved, onBack, onToggleSave, related = [], 
   useEffect(() => {
     const known = item.summary || cachedSummary(item.id);
     setSummary(known || null);
+    // Remis à zéro à chaque vérification : une lecture annulée (vérification quittée
+    // avant la fin) ne doit pas laisser « Lecture du résumé… » affiché.
+    setLoading(false);
     if (known !== undefined && known !== null) return; // déjà connu (ou déjà essayé sans succès : '')
     if (!canFetchOnDevice) return;
     let cancelled = false;
@@ -42,8 +47,8 @@ export function DetailScreen({ item, saved, onBack, onToggleSave, related = [], 
   return (
     <div className="screen detail" key={item.id}>
       <header className="detail-head">
-        <button className="back" onClick={onBack} aria-label="Retour">
-          <Back /> Retour
+        <button className="back" onClick={onBack} aria-label={backLabel}>
+          <Back /> {backLabel}
         </button>
         <div className="row">
           <button className="icon-btn" onClick={() => onToggleSave(item)} aria-label={saved ? 'Retirer des enregistrés' : 'Enregistrer'} aria-pressed={saved}>

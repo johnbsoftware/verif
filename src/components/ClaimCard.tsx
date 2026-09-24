@@ -13,17 +13,20 @@ interface Props {
   onOpen: (it: FactCheck) => void;
   /** Autres vérifications du même sujet (regroupées sous cette carte). */
   others?: FactCheck[];
+  /** Arrivée avec la dernière collecte. */
+  fresh?: boolean;
 }
 
-export function ClaimCard({ item, onOpen, others = [] }: Props) {
+export function ClaimCard({ item, onOpen, others = [], fresh = false }: Props) {
   const otherPublishers = [...new Set(others.map((o) => o.publisher))].join(', ');
-  const showRating = !!item.rating && !PLAIN.has(fold(item.rating).trim());
+  const showRating = !!item.rating && !PLAIN.has(fold(item.rating).replace(/[.!\s]+$/, '').trim());
   const social = socialLabel(item);
   return (
     <button className="card" onClick={() => onOpen(item)}>
       <span className="card-top">
         <span className="row gap-8">
           <VerdictBadge verdict={item.verdict} />
+          {fresh && <span className="tag tag-new">Nouveau</span>}
           {social && <span className="tag"><People />{social}</span>}
         </span>
         <span className="muted small nowrap">{ago(item.reviewDate)}</span>
