@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FactCheck, Feed } from '../types';
 import type { SharedContent } from '../lib/shareInbox';
-import { localImageSrc, readImageText, searchImageWithLens } from '../lib/shareInbox';
+import { downloadImage, localImageSrc, readImageText, searchImageWithLens } from '../lib/shareInbox';
 import { openArticle } from '../lib/native';
 import { lensUrlFor, previewAvailable, previewLink, type LinkPreview } from '../lib/linkPreview';
 import { cleanOcrText, extractUrls, factCheckExplorerUrl, findMatches, suggestedQuery, webSearchUrl } from '../data/match';
@@ -25,6 +25,8 @@ export function CheckScreen({ feed, shared, onClearShared, onOpen }: Props) {
   const [submitted, setSubmitted] = useState('');
   const [lensError, setLensError] = useState<string | null>(null);
   const [preview, setPreview] = useState<LinkPreview | null>(null);
+  /** Image du post téléchargée sur le téléphone (lecture du texte, Google Lens). */
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [ocr, setOcr] = useState<'idle' | 'reading' | 'found' | 'empty' | 'failed'>('idle');
 
@@ -33,7 +35,8 @@ export function CheckScreen({ feed, shared, onClearShared, onOpen }: Props) {
   const isFacebook = links.some((l) => /facebook\.com|fb\.watch|fb\.me/.test(l));
 
   // Nouveau partage : on préremplit et on lance la recherche aussitôt.
-  // Si c'est un lien seul, on essaie de lire le texte du post derrière le lien.
+  // Image (partagée ou derrière le lien) : on lit le texte écrit dessus, souvent le seul contenu
+  // du post (« Macron a offert 5 milliards… »). Lien seul : on lit aussi le texte du post.
   useEffect(() => {
     let cancelled = false;
     const q = suggestedQuery(sharedText);
@@ -41,55 +44,80 @@ export function CheckScreen({ feed, shared, onClearShared, onOpen }: Props) {
     setSubmitted(q);
     setLensError(null);
     setPreview(null);
+    setPreviewPath(null);
     setOcr('idle');
-    // Image sans texte d'accompagnement : on lit le texte écrit sur l'image.
-    if (shared?.imagePath && !q) {
+
+    const readImage = async (path: string, caption = '') => {
       setOcr('reading');
-      readImageText(shared.imagePath).then((raw) => {
-        if (cancelled) return;
-        if (raw === null) {
-          setOcr('failed');
-          return;
-        }
-        const text = cleanOcrText(raw);
-        if (text.length >= 12) {
-          setQuery(text);
-          setSubmitted(text);
-          setOcr('found');
-        } else {
-          setOcr('empty');
-        }
-      });
-    }
+      const raw = await readImageText(path);
+      if (cancelled) return;
+      if (raw === null) {
+        setOcr('failed');
+        return;
+      }
+      const text = cleanOcrText(raw);
+      if (text.length >= 12) {
+        // Texte de l'image d'abord (c'est l'affirmation), puis la légende du post s'il y en a une.
+        const full = caption && !text.includes(caption) ? `${text} ${caption}` : text;
+        setQuery(full);
+        setSubmitted(full);
+        setOcr('found');
+      } else {
+        setOcr('empty');
+      }
+    };
+
+    if (shared?.imagePath && !q) readImage(shared.imagePath);
     if (onlyLink && previewAvailable) {
       setReading(true);
-      previewLink(links[0])
-        .then((p) => {
-          if (cancelled) return;
-          setPreview(p);
-          const text = p?.text ? suggestedQuery(p.text) : '';
-          if (text) {
-            setQuery(text);
-            setSubmitted(text);
-          }
-        })
-        .finally(() => !cancelled && setReading(false));
+      (async () => {
+        const p = await previewLink(links[0]);
+        if (cancelled) return;
+        setPreview(p);
+        const caption = p?.text ? suggestedQuery(p.text) : '';
+        if (caption) {
+          setQuery(caption);
+          setSubmitted(caption);
+        }
+        setReading(false);
+        if (p?.imageUrl && !shared?.imagePath) {
+          const path = await downloadImage(p.imageUrl);
+          if (cancelled || !path) return;
+          setPreviewPath(path);
+          await readImage(path, caption);
+        }
+      })().finally(() => !cancelled && setReading(false));
     }
     return () => { cancelled = true; };
   }, [shared]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const readFailed = onlyLink && !reading && !preview?.text;
+  const readFailed = onlyLink && !reading && !preview?.text && ocr !== 'found' && ocr !== 'reading';
   const matches = useMemo(() => (submitted ? findMatches(submitted, feed?.items ?? []) : []), [submitted, feed]);
 
   const lens = async () => {
-    if (!shared?.imagePath) return;
+    const path = shared?.imagePath ?? previewPath;
+    if (!path) return;
     try {
       setLensError(null);
-      await searchImageWithLens(shared.imagePath);
+      await searchImageWithLens(path);
     } catch {
       setLensError("Impossible d'ouvrir Google Lens sur ce téléphone.");
     }
   };
+
+  const ocrNote = (
+    <>
+      {ocr === 'reading' && <p className="muted small">Lecture du texte de l'image…</p>}
+      {ocr === 'found' && <p className="muted small">Texte lu sur l'image : il a été placé ci-dessous, corrigez-le si besoin.</p>}
+      {ocr === 'failed' && (
+        <p className="muted small">
+          Lecture du texte indisponible pour l'instant (le module de lecture est peut-être encore en cours de téléchargement
+          par Google Play). Réessayez dans quelques minutes, ou tapez le texte ci-dessous.
+        </p>
+      )}
+      {ocr === 'empty' && <p className="muted small">Pas de texte lisible sur cette image : décrivez-la en quelques mots ci-dessous.</p>}
+    </>
+  );
 
   return (
     <div className="screen">
@@ -113,15 +141,7 @@ export function CheckScreen({ feed, shared, onClearShared, onOpen }: Props) {
         {shared?.imagePath && (
           <section className="panel">
             <img className="shared-img" src={localImageSrc(shared.imagePath)} alt="Image partagée" />
-            {ocr === 'reading' && <p className="muted small">Lecture du texte de l'image…</p>}
-            {ocr === 'found' && <p className="muted small">Texte lu sur l'image : il a été placé ci-dessous, corrigez-le si besoin.</p>}
-            {ocr === 'failed' && (
-              <p className="muted small">
-                Lecture du texte indisponible pour l'instant (le module de lecture est peut-être encore en cours de téléchargement
-                par Google Play). Réessayez dans quelques minutes, ou tapez le texte ci-dessous.
-              </p>
-            )}
-            {ocr === 'empty' && <p className="muted small">Pas de texte lisible sur cette image : décrivez-la en quelques mots ci-dessous.</p>}
+            {ocrNote}
             <button className="primary" onClick={lens}>
               Rechercher cette image avec Google Lens <External />
             </button>
@@ -137,16 +157,23 @@ export function CheckScreen({ feed, shared, onClearShared, onOpen }: Props) {
           <p className="muted small">
             Lien partagé : {links.map(hostOf).join(', ')}
             {reading && ' — lecture du post…'}
-            {preview?.text && ' — texte du post récupéré ci-dessous.'}
+            {preview?.text && ocr !== 'found' && ' — texte du post récupéré ci-dessous.'}
           </p>
         )}
 
         {preview?.imageUrl && !shared?.imagePath && (
           <section className="panel">
-            <img className="shared-img" src={preview.imageUrl} alt="Image du post" referrerPolicy="no-referrer" />
-            <button className="primary" onClick={() => openArticle(lensUrlFor(preview.imageUrl!))}>
+            <img
+              className="shared-img"
+              src={previewPath ? localImageSrc(previewPath) : preview.imageUrl}
+              alt="Image du post"
+              referrerPolicy="no-referrer"
+            />
+            {ocrNote}
+            <button className="primary" onClick={() => (previewPath ? lens() : openArticle(lensUrlFor(preview.imageUrl!)))}>
               Rechercher cette image avec Google Lens <External />
             </button>
+            {lensError && <p className="banner banner-soft">{lensError}</p>}
           </section>
         )}
 

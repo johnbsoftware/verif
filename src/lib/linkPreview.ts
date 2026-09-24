@@ -13,6 +13,17 @@ export interface LinkPreview {
   imageUrl: string | null;
 }
 
+/**
+ * Carte de visite d'une page ou d'un profil, que Facebook et Instagram renvoient à la place
+ * du texte du post : « Francis Beck. 672 followers · 40 en parlent. Création digitale ».
+ */
+const PROFILE_BLURB =
+  /\b\d[\d\s.,]*\s*(k|m|md)?\s*(followers|abonn[ée]s?|mentions j.aime|j.aime|likes|membres|members|personnes suivies|following)\b|\ben parlent\b|talking about this|cr[ée]ateur de contenu|cr[ée]ation digitale|digital creator|personnalit[ée] publique|public figure|see posts, photos and more|voir les publications/i;
+
+export function isProfileBlurb(text: string): boolean {
+  return PROFILE_BLURB.test(text);
+}
+
 const GENERIC = /^(facebook|instagram|tiktok|x|twitter|youtube|log in|login|connexion|se connecter|sign up|inscription|watch|regarder)\b/i;
 
 const hostOf = (u: string) => {
@@ -68,8 +79,11 @@ function openGraph(html: string, site: string): LinkPreview | null {
   const meta = (name: string) =>
     doc.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.getAttribute('content') ?? null;
   const title = clean(meta('og:title'));
-  const desc = clean(meta('og:description') ?? meta('description'));
-  const text = [title, desc].filter(Boolean).join(' — ') || null;
+  let desc = clean(meta('og:description') ?? meta('description'));
+  if (desc && isProfileBlurb(desc)) desc = null;
+  // Facebook / Instagram : og:title est le nom de l'auteur, pas le contenu du post.
+  const social = /(^|\.)(facebook|instagram|threads)\.(com|net)$/.test(site);
+  const text = (social ? desc : [title, desc].filter(Boolean).join(' — ')) || null;
   const imageUrl = meta('og:image');
   return text || imageUrl ? { site, text, imageUrl } : null;
 }

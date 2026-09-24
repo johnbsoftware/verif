@@ -23,8 +23,11 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -93,6 +96,62 @@ public class ShareInboxPlugin extends Plugin {
                 call.reject("Lecture du texte impossible", e);
                 recognizer.close();
             });
+    }
+
+    /**
+     * Télécharge l'image d'un post (aperçu d'un lien Facebook, TikTok…) dans le cache,
+     * pour en lire le texte (readText) et la confier à Google Lens (searchImage).
+     */
+    @PluginMethod
+    public void downloadImage(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !(url.startsWith("https://") || url.startsWith("http://"))) {
+            call.reject("Adresse d'image invalide");
+            return;
+        }
+        File dir = new File(getContext().getCacheDir(), "apercus");
+        if (!dir.exists() && !dir.mkdirs()) {
+            call.reject("Cache indisponible");
+            return;
+        }
+        File[] old = dir.listFiles();
+        if (old != null) for (File f : old) f.delete(); // on ne garde que le dernier aperçu
+        HttpURLConnection c = null;
+        File out = null;
+        try {
+            c = (HttpURLConnection) new URL(url).openConnection();
+            c.setConnectTimeout(10000);
+            c.setReadTimeout(15000);
+            c.setInstanceFollowRedirects(true);
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36");
+            c.setRequestProperty("Accept", "image/*");
+            int code = c.getResponseCode();
+            String type = c.getContentType();
+            if (code != 200 || type == null || !type.startsWith("image/")) {
+                call.reject("Image indisponible (HTTP " + code + ")");
+                return;
+            }
+            String mime = type.split(";")[0].trim();
+            String ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime);
+            out = new File(dir, "apercu-" + System.currentTimeMillis() + "." + (ext != null ? ext : "jpg"));
+            try (InputStream in = c.getInputStream(); OutputStream os = new FileOutputStream(out)) {
+                byte[] buf = new byte[64 * 1024];
+                long total = 0;
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    total += n;
+                    if (total > MAX_IMAGE_BYTES) throw new IOException("Image trop lourde");
+                    os.write(buf, 0, n);
+                }
+            }
+            call.resolve(new JSObject().put("path", out.getAbsolutePath()).put("mimeType", mime));
+        } catch (Exception e) {
+            if (out != null) out.delete();
+            Log.e(TAG, "downloadImage", e);
+            call.reject("Téléchargement de l'image impossible", e);
+        } finally {
+            if (c != null) c.disconnect();
+        }
     }
 
     @PluginMethod

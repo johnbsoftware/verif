@@ -13,6 +13,7 @@ interface ShareInboxPlugin {
   take(): Promise<SharedContent>;
   searchImage(options: { path: string }): Promise<{ via: 'lens' | 'google' | 'chooser' }>;
   readText(options: { path: string }): Promise<{ text: string }>;
+  downloadImage(options: { url: string }): Promise<{ path: string; mimeType?: string }>;
   addListener(event: 'shareReceived', cb: () => void): Promise<PluginListenerHandle>;
 }
 
@@ -48,6 +49,19 @@ export async function readImageText(path: string): Promise<string | null> {
   if (!available) return null;
   try {
     return (await ShareInbox.readText({ path })).text ?? '';
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Télécharge l'image d'un post (aperçu d'un lien partagé) dans le cache de l'appli,
+ * pour en lire le texte et la confier à Google Lens. null si impossible.
+ */
+export async function downloadImage(url: string): Promise<string | null> {
+  if (!available) return null;
+  try {
+    return (await ShareInbox.downloadImage({ url })).path || null;
   } catch {
     return null;
   }

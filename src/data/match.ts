@@ -75,13 +75,23 @@ export function suggestedQuery(text: string): string {
   return clean.length > 160 ? `${clean.slice(0, 160).replace(/\s+\S*$/, '')}…` : clean;
 }
 
+/**
+ * Requête courte pour les moteurs externes : un texte de 600 caractères lu sur une image
+ * ne donne rien dans Fact Check Explorer. On garde les 12 premiers mots (sans les liens).
+ */
+export function shortQuery(text: string): string {
+  const words = stripUrls(text).replace(/…$/, '').split(/\s+/).filter(Boolean);
+  const q = words.slice(0, 12).join(' ');
+  return q.length > 120 ? q.slice(0, 120).replace(/\s+\S*$/, '') : q;
+}
+
 export function factCheckExplorerUrl(query: string): string {
-  const q = query.replace(/…$/, '').trim();
+  const q = shortQuery(query);
   return `https://toolbox.google.com/factcheck/explorer/search/${encodeURIComponent(q)};hl=fr`;
 }
 
 export function webSearchUrl(query: string): string {
-  return `https://www.google.com/search?q=${encodeURIComponent(`${query.replace(/…$/, '')} vérification`)}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(`${shortQuery(query)} vérification`)}`;
 }
 
 // Lignes d'interface qu'on retrouve sur les captures d'écran de réseaux sociaux.
