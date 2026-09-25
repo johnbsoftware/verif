@@ -12,7 +12,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { toItem, mergeItems, classifyVerdict, classifyTheme, extractSummary } from './normalize.mjs';
+import { toItem, mergeItems, classifyVerdict, classifyTheme, extractSummary, candidateMatcher, toItemsAnyPublisher } from './normalize.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const API = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
@@ -22,6 +22,9 @@ const MAX_PAGES = 6;
 const DAILY_WINDOW_DAYS = 7; // l'indexation Google peut avoir quelques jours de retard
 const FIRST_WINDOW_DAYS = 60;
 const KEEP_DAYS = 60;
+// Présidentielle : les déclarations des candidats sont cherchées sur 12 mois et gardées toute la campagne.
+const CANDIDATE_FIRST_DAYS = 365;
+const CANDIDATE_KEEP_DAYS = 400;
 const SUMMARY_CONCURRENCY = 4;
 const SUMMARY_BUDGET_MS = 4 * 60 * 1000; // au-delà, on s'arrête : le reste sera fait demain
 // Certains sites refusent les navigateurs inconnus : on se présente comme un navigateur mobile, en signant.
@@ -148,12 +151,13 @@ export async function addSummaries(items, { fetchImpl = fetch, log = console.log
   return found;
 }
 
-async function searchSite(source, { key, maxAgeDays, fetchImpl, log }) {
+/** Toutes les pages d'une recherche (params : reviewPublisherSiteFilter, ou query + languageCode). */
+async function searchClaims(params, { key, maxAgeDays, fetchImpl }) {
   const claims = [];
   let pageToken;
   for (let page = 0; page < MAX_PAGES; page++) {
     const q = new URLSearchParams({
-      reviewPublisherSiteFilter: source.site,
+      ...params,
       maxAgeDays: String(maxAgeDays),
       pageSize: String(PAGE_SIZE),
       key,
@@ -169,11 +173,16 @@ async function searchSite(source, { key, maxAgeDays, fetchImpl, log }) {
     pageToken = data.nextPageToken;
     if (!pageToken) break;
   }
+  return claims;
+}
+
+async function searchSite(source, { key, maxAgeDays, fetchImpl, log }) {
+  const claims = await searchClaims({ reviewPublisherSiteFilter: source.site }, { key, maxAgeDays, fetchImpl });
   log(`  ${source.name.padEnd(34)} ${String(claims.length).padStart(4)} affirmations`);
   return claims;
 }
 
-export async function collect({ key, sources, previous, now = new Date(), fetchImpl = fetch, log = console.log, summaries = true }) {
+export async function collect({ key, sources, election = null, previous, now = new Date(), fetchImpl = fetch, log = console.log, summaries = true }) {
   const hadHistory = Array.isArray(previous?.items) && previous.items.length > 0 && !previous.demo;
   // Un organisme absent de l'historique (nouvelle source) est collecté sur toute la période.
   const knownSites = new Set(hadHistory ? previous.items.map((it) => it.site) : []);
@@ -199,12 +208,50 @@ export async function collect({ key, sources, previous, now = new Date(), fetchI
   }
   if (failures === sources.length) throw new Error('Toutes les sources ont échoué — clé API invalide ou quota dépassé ?');
 
+  // Présidentielle : pour chaque candidat, ses déclarations vérifiées par n'importe quel éditeur.
+  // Seules comptent les affirmations dont il est l'auteur (pas celles qui parlent de lui).
+  const candidates = election?.candidats ?? [];
+  const candidateOf = candidateMatcher(candidates);
+  if (candidates.length) {
+    const known = new Set(hadHistory ? previous.items.map((it) => it.candidate).filter(Boolean) : []);
+    const bySite = new Map(sources.map((s) => [s.site, s]));
+    const seen = new Set(fresh.map((it) => it.id));
+    log(`Présidentielle : ${candidates.length} candidats`);
+    for (const c of candidates) {
+      try {
+        const maxAgeDays = known.has(c.name) ? DAILY_WINDOW_DAYS : CANDIDATE_FIRST_DAYS;
+        const claims = await searchClaims({ query: c.name, languageCode: 'fr' }, { key, maxAgeDays, fetchImpl });
+        let n = 0;
+        for (const claim of claims) {
+          for (const it of toItemsAnyPublisher(claim, bySite)) {
+            if (candidateOf(it.claimant) !== c.name || seen.has(it.id)) continue;
+            seen.add(it.id);
+            fresh.push(it);
+            n++;
+          }
+        }
+        log(`  ${c.name.padEnd(34)} ${String(n).padStart(4)} déclarations`);
+      } catch (err) {
+        log(`  ${c.name.padEnd(34)} ÉCHEC : ${err.message}`);
+      }
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+  const tag = (it) => {
+    const c = candidateOf(it.claimant);
+    if (c) it.candidate = c;
+    else delete it.candidate;
+    return it;
+  };
+  fresh.forEach(tag);
+
   // Les règles de classement évoluent : on reclasse aussi l'historique à chaque collecte,
   // et on écarte les éléments d'organismes retirés de sources.json.
   const sites = new Set(sources.map((s) => s.site));
+  // Les déclarations d'un candidat retiré de la liste (et venues d'un éditeur hors sources.json) partent aussi.
   const history = (hadHistory ? previous.items : [])
-    .filter((it) => sites.has(it.site))
-    .map((it) => ({ ...it, verdict: classifyVerdict(it.rating), theme: classifyTheme(it.claim, it.title ?? '') }));
+    .map((it) => tag({ ...it, verdict: classifyVerdict(it.rating), theme: classifyTheme(it.claim, it.title ?? '') }))
+    .filter((it) => sites.has(it.site) || it.candidate);
   // Une vérification déjà connue garde son résumé (la nouvelle version de l'API n'en a pas).
   const known = new Map(history.map((it) => [it.id, it]));
   for (const it of fresh) {
@@ -214,7 +261,9 @@ export async function collect({ key, sources, previous, now = new Date(), fetchI
       if (old.summaryV !== undefined) it.summaryV = old.summaryV;
     }
   }
-  const items = mergeItems(history, fresh, { now, keepDays: KEEP_DAYS });
+  const items = mergeItems(history, fresh, {
+    now, keepDays: KEEP_DAYS, keepDaysFor: (it) => (it.candidate ? CANDIDATE_KEEP_DAYS : KEEP_DAYS),
+  });
   if (summaries) await addSummaries(items, { fetchImpl, log });
   const counts = Object.fromEntries(sources.map((s) => [s.site, 0]));
   for (const it of items) counts[it.site] = (counts[it.site] ?? 0) + 1;
@@ -223,6 +272,13 @@ export async function collect({ key, sources, previous, now = new Date(), fetchI
     version: 1,
     generatedAt: now.toISOString(),
     keepDays: KEEP_DAYS,
+    ...(candidates.length ? {
+      election: {
+        name: election.election ?? 'Présidentielle',
+        updated: election.maj ?? null,
+        candidates: candidates.map((c) => ({ name: c.name })),
+      },
+    } : {}),
     sources: report.map(({ site, name, country, lang, fetched, error }) => ({
       site, name, country, lang, fetchedToday: fetched, total: counts[site] ?? 0, ...(error ? { error } : {}),
     })),
@@ -246,8 +302,10 @@ async function main() {
     process.exit(2);
   }
   const { sources } = JSON.parse(await readFile(resolve(HERE, 'sources.json'), 'utf8'));
+  // Facultatif : liste des candidats (supprimer le fichier ou vider la liste pour couper la rubrique).
+  const election = await readFile(resolve(HERE, 'candidats.json'), 'utf8').then(JSON.parse).catch(() => null);
   const previous = await loadPrevious(a.previous ?? process.env.PREVIOUS_FEED_URL ?? out, fetch);
-  const feed = await collect({ key, sources, previous });
+  const feed = await collect({ key, sources, election, previous });
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, JSON.stringify(feed));
   console.log(`\n${feed.items.length} vérifications écrites dans ${out}`);

@@ -5,6 +5,8 @@ import type { Feed } from '../types';
 // ce qui n'y figurait pas est « nouveau » jusqu'au flux suivant (même si l'appli est
 // fermée entre-temps).
 
+const RECENT_MS = 7 * 86_400_000;
+
 export interface SeenState {
   /** Date de la collecte à laquelle se rapportent `ids` et `fresh`. */
   generatedAt: string;
@@ -24,5 +26,9 @@ export function nextSeen(feed: Feed, previous: SeenState | null): SeenState {
   if (previous && previous.generatedAt === feed.generatedAt) return previous;
   if (!previous || !previous.ids.length) return { generatedAt: feed.generatedAt, ids, fresh: [] };
   const known = new Set(previous.ids);
-  return { generatedAt: feed.generatedAt, ids, fresh: ids.filter((id) => !known.has(id)) };
+  // Seules les vérifications récentes peuvent être « nouvelles » : l'ajout d'un candidat
+  // apporte jusqu'à un an de déclarations, qui ne sont pas des nouveautés.
+  const since = Date.parse(feed.generatedAt) - RECENT_MS;
+  const fresh = feed.items.filter((it) => !known.has(it.id) && Date.parse(it.reviewDate) >= since).map((it) => it.id);
+  return { generatedAt: feed.generatedAt, ids, fresh };
 }

@@ -19,6 +19,15 @@ export interface FactCheck {
   summary?: string | null;
   url: string;
   reviewDate: string;
+  /** Présidentielle : nom du candidat auteur de l'affirmation (collector/candidats.json). */
+  candidate?: string;
+}
+
+export interface Election {
+  name: string;
+  /** Date de mise à jour de la liste des candidats (AAAA-MM-JJ). */
+  updated: string | null;
+  candidates: { name: string }[];
 }
 
 export interface FeedSource {
@@ -37,6 +46,8 @@ export interface Feed {
   /** Présent sur le flux de démonstration livré avec l'appli. */
   demo?: boolean;
   keepDays?: number;
+  /** Rubrique Présidentielle, présente quand collector/candidats.json liste des candidats. */
+  election?: Election;
   sources: FeedSource[];
   items: FactCheck[];
 }

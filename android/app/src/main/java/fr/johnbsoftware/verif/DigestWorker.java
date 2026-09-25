@@ -70,6 +70,7 @@ public class DigestWorker extends Worker {
     /** Collecte de GitHub en retard : on réessaie toutes les heures, 4 fois au plus. */
     private static final int MAX_ATTEMPTS = 4;
     private static final long STALE_MS = TimeUnit.HOURS.toMillis(20);
+    private static final long RECENT_MS = TimeUnit.DAYS.toMillis(7);
 
     public DigestWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -170,6 +171,9 @@ public class DigestWorker extends Worker {
             if (id.isEmpty()) continue;
             allIds.add(id);
             if (known.contains(id)) continue;
+            // Seules les vérifications de la semaine sont annoncées (un candidat ajouté à la
+            // rubrique Présidentielle apporte jusqu'à un an de déclarations d'un coup).
+            if (System.currentTimeMillis() - parseIso(it.optString("reviewDate", "")) > RECENT_MS) continue;
             String lang = it.optString("lang", "fr");
             if (!english && !(lang.isEmpty() || lang.toLowerCase(Locale.ROOT).startsWith("fr"))) continue;
             if (!countries.isEmpty() && !countries.contains(it.optString("country", ""))) continue;

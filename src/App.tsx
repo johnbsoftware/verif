@@ -40,6 +40,8 @@ export default function App() {
   const openDetail = useCallback((it: FactCheck) => setStack([it]), []);
   const openRelated = useCallback((it: FactCheck) => setStack((s) => [...s, it]), []);
   const closeDetail = useCallback(() => setStack((s) => s.slice(0, -1)), []);
+  // Rubrique Présidentielle (onglet Fil) : null = fermée, '' = liste, sinon un candidat.
+  const [election, setElection] = useState<string | null>(null);
   const [seen, setSeen] = useState<SeenState | null>(() => load<SeenState | null>('seen', null));
   const [shared, setShared] = useState<SharedContent | null>(null);
   const lastFetch = useRef(0);
@@ -93,12 +95,14 @@ export default function App() {
   }, []);
 
   // Bouton retour Android : détail → liste → onglet Fil → quitter.
-  const nav = useRef({ detail, tab });
-  nav.current = { detail, tab };
+  const nav = useRef({ detail, tab, election });
+  nav.current = { detail, tab, election };
   useEffect(() => {
     if (!isNative) return;
     const sub = CapApp.addListener('backButton', () => {
       if (nav.current.detail) setStack((s) => s.slice(0, -1));
+      else if (nav.current.tab === 'feed' && nav.current.election) setElection('');
+      else if (nav.current.tab === 'feed' && nav.current.election === '') setElection(null);
       else if (nav.current.tab !== 'feed') setTab('feed');
       else CapApp.exitApp();
     });
@@ -174,6 +178,8 @@ export default function App() {
             loading={loading}
             notice={notice}
             freshIds={freshIds}
+            election={election}
+            onElection={setElection}
             onOpen={openDetail}
             onOpenFilters={() => setTab('filters')}
             onRefresh={() => refresh(true)}

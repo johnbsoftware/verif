@@ -162,19 +162,69 @@ export function toItem(claim, source) {
 
 /**
  * Fusionne l'ancien flux et les nouveaux éléments : dédoublonne par id (le plus
- * récent l'emporte), écarte ce qui dépasse keepDays, trie du plus récent au
- * plus ancien et plafonne à maxItems.
+ * récent l'emporte), écarte ce qui dépasse keepDays (ou keepDaysFor(élément)), trie du
+ * plus récent au plus ancien et plafonne à maxItems. Les déclarations de candidats
+ * (champ candidate) ne comptent pas dans le plafond : elles sont gardées toute la campagne.
  */
-export function mergeItems(previous, fresh, { now = new Date(), keepDays = 60, maxItems = 2000 } = {}) {
-  const limit = now.getTime() - keepDays * 86_400_000;
+export function mergeItems(previous, fresh, { now = new Date(), keepDays = 60, maxItems = 2000, keepDaysFor } = {}) {
+  const limitFor = (it) => now.getTime() - (keepDaysFor?.(it) ?? keepDays) * 86_400_000;
   const byId = new Map();
   for (const it of [...(previous ?? []), ...(fresh ?? [])]) {
-    if (!it?.id || Date.parse(it.reviewDate) < limit) continue;
+    if (!it?.id || Date.parse(it.reviewDate) < limitFor(it)) continue;
     byId.set(it.id, it);
   }
-  return [...byId.values()]
-    .sort((a, b) => Date.parse(b.reviewDate) - Date.parse(a.reviewDate))
-    .slice(0, maxItems);
+  const sorted = [...byId.values()].sort((a, b) => Date.parse(b.reviewDate) - Date.parse(a.reviewDate));
+  const regular = new Set(sorted.filter((it) => !it.candidate).slice(0, maxItems));
+  return sorted.filter((it) => it.candidate || regular.has(it));
+}
+
+// --- Présidentielle : déclarations des candidats ---
+
+/** Nom comparable : minuscules, sans accents ni ponctuation (« Jean-Luc Mélenchon » → « jean luc melenchon »). */
+export function nameKey(text) {
+  return fold(text).replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Fonction qui, pour un auteur d'affirmation (« Marine Le Pen, présidente du RN »,
+ * « Le député LFI … »), retourne le nom du candidat qu'il désigne, ou null.
+ * Le nom complet (ou un alias) doit y figurer en mots entiers.
+ */
+export function candidateMatcher(candidates) {
+  const list = (candidates ?? []).map((c) => ({
+    name: c.name,
+    keys: [c.name, ...(c.aliases ?? [])].map(nameKey).filter(Boolean),
+  }));
+  return (claimant) => {
+    const k = ` ${nameKey(claimant ?? '')} `;
+    if (!k.trim()) return null;
+    return list.find((c) => c.keys.some((key) => k.includes(` ${key} `)))?.name ?? null;
+  };
+}
+
+/** Pays probable d'un éditeur d'après l'extension de son site. */
+export function countryOfSite(site) {
+  const tld = String(site).split('.').pop();
+  return { fr: 'France', be: 'Belgique', ch: 'Suisse', ca: 'Canada', lu: 'Luxembourg', sn: 'Sénégal', ci: "Côte d'Ivoire",
+    cm: 'Cameroun', ma: 'Maroc', dz: 'Algérie', tn: 'Tunisie', cd: 'RD Congo' }[tld] ?? 'France';
+}
+
+/**
+ * Recherche par nom : une affirmation peut avoir été vérifiée par plusieurs éditeurs,
+ * y compris hors de sources.json. Un élément par vérification ; un éditeur connu garde
+ * le nom et le pays de sources.json.
+ */
+export function toItemsAnyPublisher(claim, knownSources = new Map()) {
+  const out = [];
+  for (const review of Array.isArray(claim?.claimReview) ? claim.claimReview : []) {
+    const site = String(review?.publisher?.site || hostOf(review?.url)).replace(/^www\./, '');
+    if (!site) continue;
+    const known = [...knownSources.values()].find((s) => site === s.site || site.endsWith(`.${s.site}`));
+    const source = known ?? { site, name: review?.publisher?.name || site, country: countryOfSite(site), lang: 'fr' };
+    const it = toItem({ ...claim, claimReview: [review] }, source);
+    if (it) out.push(it);
+  }
+  return out;
 }
 
 // --- Résumé de l'article (balises d'aperçu écrites par la rédaction) ---

@@ -209,3 +209,55 @@ test('résumés : une panne passagère est retentée (3 essais au plus), un refu
   await addSummaries([refused], { fetchImpl: async () => ({ ok: false, status: 403 }), log: () => {} });
   assert.equal(refused.summary, null);
 });
+
+import { candidateMatcher, toItemsAnyPublisher } from './normalize.mjs';
+
+test('présidentielle : reconnaissance du candidat dans l’auteur de l’affirmation', () => {
+  const of = candidateMatcher([{ name: 'Marine Le Pen' }, { name: 'Jean-Luc Mélenchon' }, { name: 'Édouard Philippe' }, { name: 'Nicolas Dupont-Aignan' }]);
+  assert.equal(of('Marine Le Pen'), 'Marine Le Pen');
+  assert.equal(of('Marine Le Pen, présidente du groupe RN'), 'Marine Le Pen');
+  assert.equal(of('Jean-Luc Melenchon'), 'Jean-Luc Mélenchon');
+  assert.equal(of('Edouard Philippe'), 'Édouard Philippe');
+  assert.equal(of('Nicolas Dupont Aignan'), 'Nicolas Dupont-Aignan');
+  assert.equal(of('Jean-Marie Le Pen'), null);
+  assert.equal(of('Marion Maréchal'), null);
+  assert.equal(of('Des publications sur les réseaux sociaux'), null);
+  assert.equal(of(null), null);
+});
+
+test('présidentielle : une déclaration trouvée par nom, gardée toute la campagne, hors plafond', async () => {
+  const now = new Date('2026-09-25T05:00:00Z');
+  const old = new Date('2026-03-01T10:00:00Z').toISOString();
+  const pages = {
+    'query=Marine+Le+Pen': {
+      claims: [
+        { text: 'On compte 9 millions de m² de bureaux vides', claimant: 'Marine Le Pen', claimDate: old,
+          claimReview: [
+            { publisher: { name: 'Les Décodeurs', site: 'lemonde.fr' }, url: 'https://www.lemonde.fr/x', title: 'T', reviewDate: old, textualRating: 'Faux', languageCode: 'fr' },
+            { publisher: { name: 'AFP Factuel', site: 'factuel.afp.com' }, url: 'https://factuel.afp.com/y', title: 'T', reviewDate: old, textualRating: 'Trompeur', languageCode: 'fr' },
+          ] },
+        { text: 'Une photo montre Marine Le Pen au ski', claimant: 'Multiple sources', claimDate: old,
+          claimReview: [{ publisher: { site: 'factuel.afp.com' }, url: 'https://factuel.afp.com/z', reviewDate: old, textualRating: 'Faux' }] },
+      ],
+    },
+  };
+  const fetchImpl = async (url) => {
+    const hit = Object.entries(pages).find(([k]) => url.includes(k));
+    return { ok: true, json: async () => (hit ? hit[1] : {}) };
+  };
+  const election = { election: 'Présidentielle 2027', candidats: [{ name: 'Marine Le Pen' }] };
+  const feed = await collect({ key: 'K', sources: [source], election, previous: null, now, fetchImpl, log: () => {}, summaries: false });
+  assert.equal(feed.items.length, 2, 'deux vérifications de la déclaration, pas l’affirmation « à propos » d’elle');
+  assert.ok(feed.items.every((it) => it.candidate === 'Marine Le Pen'));
+  assert.deepEqual(feed.items.map((it) => it.publisher).sort(), ['AFP Factuel', 'Les Décodeurs']);
+  assert.equal(feed.election.candidates[0].name, 'Marine Le Pen');
+  // Lendemain : l'historique (hors 60 jours, éditeur hors sources.json) est conservé.
+  const next = await collect({ key: 'K', sources: [source], election, previous: feed, now: new Date('2026-09-26T05:00:00Z'),
+    fetchImpl: async () => ({ ok: true, json: async () => ({}) }), log: () => {}, summaries: false });
+  assert.equal(next.items.length, 2);
+  // Candidat retiré de la liste : ses déclarations venues d'éditeurs hors sources.json disparaissent.
+  const none = await collect({ key: 'K', sources: [source], election: { candidats: [] }, previous: next,
+    fetchImpl: async () => ({ ok: true, json: async () => ({}) }), log: () => {}, summaries: false });
+  assert.equal(none.items.length, 0);
+  assert.equal(none.election, undefined);
+});

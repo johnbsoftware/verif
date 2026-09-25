@@ -8,6 +8,7 @@ import { Chevron, Close, Globe, People, Refresh, Search } from '../components/Ic
 import { socialOf } from '../data/social';
 import { groupSimilar } from '../data/groups';
 import { THEMES } from '../config';
+import { ElectionView } from './ElectionView';
 
 const VERDICTS: { id: VerdictFilter; label: string }[] = [
   { id: 'tous', label: 'Tous' },
@@ -24,12 +25,15 @@ interface Props {
   notice: string | null;
   /** Vérifications arrivées avec la dernière collecte (repère « Nouveau »). */
   freshIds: Set<string>;
+  /** Rubrique Présidentielle : null = fermée, '' = liste des candidats, sinon le candidat affiché. */
+  election: string | null;
+  onElection: (v: string | null) => void;
   onOpen: (it: FactCheck) => void;
   onOpenFilters: () => void;
   onRefresh: () => void;
 }
 
-export function FeedScreen({ feed, settings, allCountries, loading, notice, freshIds, onOpen, onOpenFilters, onRefresh }: Props) {
+export function FeedScreen({ feed, settings, allCountries, loading, notice, freshIds, election, onElection, onOpen, onOpenFilters, onRefresh }: Props) {
   const [theme, setTheme] = useState('Tout');
   const [verdict, setVerdict] = useState<VerdictFilter>('tous');
   const [search, setSearch] = useState('');
@@ -41,12 +45,22 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
   const themeChips = ['Tout', ...(settings.themes.length ? THEMES.filter((t) => settings.themes.includes(t)) : THEMES)];
   const activeTheme = themeChips.includes(theme) ? theme : 'Tout';
 
+  // Le fil couvre keepDays (60 jours) ; les déclarations plus anciennes des candidats
+  // ne se voient que dans la rubrique Présidentielle.
+  const recent = useMemo(() => {
+    if (!feed) return [];
+    const since = Date.parse(feed.generatedAt) - (feed.keepDays ?? 60) * 86_400_000;
+    return feed.items.filter((it) => !it.candidate || Date.parse(it.reviewDate) >= since);
+  }, [feed]);
+  const hasElection = !!feed?.election?.candidates.length;
+  const inElection = hasElection && election !== null;
+
   const items = useMemo(
     () =>
-      applyFilters(feed?.items ?? [], { settings, theme: activeTheme, verdict, search: deferredSearch }).filter(
+      applyFilters(recent, { settings, theme: activeTheme, verdict, search: deferredSearch }).filter(
         (it) => !socialOnly || socialOf(it).social,
       ),
-    [feed, settings, activeTheme, verdict, deferredSearch, socialOnly],
+    [recent, settings, activeTheme, verdict, deferredSearch, socialOnly],
   );
   // Regroupement par sujet : une carte (la vérification « de tête ») par affirmation.
   const subjects = useMemo(
@@ -102,14 +116,25 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
         <button className={`chip chip-social${socialOnly ? ' chip-on' : ''}`} aria-pressed={socialOnly} onClick={() => setSocialOnly(!socialOnly)}>
           <People size={16} /> Réseaux sociaux
         </button>
+        {hasElection && (
+          <button className={`chip${inElection ? ' chip-on' : ''}`} aria-pressed={inElection} onClick={() => onElection(inElection ? null : '')}>
+            {feed!.election!.name}
+          </button>
+        )}
         <span className="chips-sep" aria-hidden="true" />
         {themeChips.map((t) => (
-          <button key={t} className={`chip${activeTheme === t ? ' chip-on' : ''}`} aria-pressed={activeTheme === t} onClick={() => setTheme(t)}>
+          <button
+            key={t}
+            className={`chip${!inElection && activeTheme === t ? ' chip-on' : ''}`}
+            aria-pressed={!inElection && activeTheme === t}
+            onClick={() => { setTheme(t); onElection(null); }}
+          >
             {t}
           </button>
         ))}
       </nav>
 
+      {!inElection && (
       <div className="segments" role="tablist" aria-label="Verdict">
         {VERDICTS.map((v) => (
           <button key={v.id} role="tab" aria-selected={verdict === v.id} className={`segment${verdict === v.id ? ' segment-on' : ''}`} onClick={() => setVerdict(v.id)}>
@@ -117,8 +142,13 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
           </button>
         ))}
       </div>
+      )}
 
       <main className="list">
+        {inElection && feed?.election ? (
+          <ElectionView election={feed.election} items={feed.items} selected={election ?? ''} onSelect={onElection} onOpen={onOpen} />
+        ) : (
+        <>
         {feed?.demo && (
           <p className="banner">Données de démonstration. Les vraies vérifications apparaîtront une fois le flux quotidien configuré.</p>
         )}
@@ -152,6 +182,8 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
 
         {feed && items.length === 0 && (
           <p className="empty">Aucune vérification pour ces filtres.</p>
+        )}
+        </>
         )}
       </main>
     </div>

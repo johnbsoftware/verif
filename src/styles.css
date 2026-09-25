@@ -249,3 +249,7 @@ button:disabled { opacity: 0.55; cursor: default; }
 /* Écrans étroits : les repères (verdict, Nouveau, réseau) passent à la ligne plutôt que de déborder. */
 .card-top { gap: 8px; }
 .card-top > .row { flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+
+/* Présidentielle (1.3.0) */
+.candidate-name { margin: 0; font-family: var(--serif); font-weight: 600; font-size: 26px; line-height: 1.2; }
+.chevron-right { display: inline-flex; transform: rotate(-90deg); color: var(--muted); }

@@ -23,3 +23,11 @@ test('collecte suivante : seules les vérifications inédites sont nouvelles, et
 test('flux de démonstration ignoré', () => {
   expect(nextSeen(feed('2026-09-23T07:00:00Z', [a], true), null).ids).toEqual([]);
 });
+
+test('déclarations anciennes arrivées d’un coup (nouveau candidat) : pas « nouvelles »', () => {
+  const day1 = nextSeen(feed('2026-09-24T07:00:00Z'), null);
+  const oldOne = fc({ reviewDate: '2026-03-01T10:00:00Z', candidate: 'Marine Le Pen' });
+  const recent = fc({ reviewDate: '2026-09-24T20:00:00Z' });
+  const day2 = nextSeen(feed('2026-09-25T07:00:00Z', [recent, a, b, oldOne]), day1);
+  expect(day2.fresh).toEqual([recent.id]);
+});

@@ -34,6 +34,7 @@ export function ClaimCard({ item, onOpen, others = [], fresh = false }: Props) {
       <span className="card-claim">« {item.claim} »</span>
       {showRating && <span className="card-rating">{item.rating}</span>}
       <span className="card-meta">
+        {item.candidate ? `${item.candidate} · ` : ''}
         {item.theme === item.country ? item.country : `${item.country} · ${item.theme}`} · {item.publisher}
       </span>
       {others.length > 0 && (

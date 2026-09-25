@@ -58,3 +58,15 @@ Pour chaque vérification : l'affirmation, son auteur, le verdict **tel qu'écri
 
 `npm install` une fois (Vitest ajouté pour les tests), puis `npm run android`. Dans Android Studio, laisser
 Gradle se synchroniser (nouvelle dépendance WorkManager). Sur GitHub : committer aussi `pages/` et le workflow.
+
+## Rubrique Présidentielle (1.3.0)
+
+- `collector/candidats.json` : la liste des candidats (nom complet, et au besoin d'autres écritures dans `aliases`).
+  Modifiable à tout moment : prise en compte à la collecte suivante, sans nouvel APK. Vider la liste coupe la rubrique.
+- Chaque matin, le collecteur cherche le nom de chaque candidat chez **tous** les vérificateurs recensés par Google
+  (12 mois la première fois, puis 7 jours) et ne garde que les affirmations dont il est l'**auteur**.
+  Ces déclarations sont conservées 400 jours (toute la campagne), hors du plafond de 2 000 éléments.
+- Dans l'appli : puce « Présidentielle 2027 » dans le fil → candidats par ordre alphabétique du nom de famille →
+  déclarations vérifiées. Aucun décompte ni classement, par choix d'équilibre.
+- Les déclarations anciennes arrivées d'un coup (nouveau candidat) ne sont ni marquées « Nouveau » ni annoncées
+  par le rappel du matin (seules les vérifications de moins de 7 jours le sont).

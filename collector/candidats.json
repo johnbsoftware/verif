@@ -1,0 +1,30 @@
+{
+  "_lisezmoi": "Candidats de la rubrique Présidentielle. Pris en compte dès la collecte suivante (pas besoin de nouvel APK). « name » : nom complet tel qu'écrit par les vérificateurs ; « aliases » (facultatif) : autres écritures du nom complet — jamais le nom seul (« Le Pen » désignerait aussi Marion Maréchal ou Jean-Marie Le Pen). Liste de départ : candidats déclarés selon LCP (mise à jour du 16/09/2026), ordre indifférent (l'appli trie par nom de famille). Pour couper la rubrique : vider la liste.",
+  "election": "Présidentielle 2027",
+  "maj": "2026-09-25",
+  "candidats": [
+    { "name": "Nathalie Arthaud" },
+    { "name": "François Asselineau" },
+    { "name": "Gabriel Attal" },
+    { "name": "Delphine Batho" },
+    { "name": "Xavier Bertrand" },
+    { "name": "Karim Bouamrane" },
+    { "name": "Nicolas Dupont-Aignan" },
+    { "name": "Clara Egger" },
+    { "name": "Olivier Faure" },
+    { "name": "Raphaël Glucksmann" },
+    { "name": "Francis Lalanne" },
+    { "name": "Marine Le Pen" },
+    { "name": "David Lisnard" },
+    { "name": "Emmanuel Maurel" },
+    { "name": "Jean-Luc Mélenchon" },
+    { "name": "Antoine Mikolajczak" },
+    { "name": "Édouard Philippe" },
+    { "name": "Florian Philippot" },
+    { "name": "Bruno Retailleau" },
+    { "name": "Fabien Roussel" },
+    { "name": "François Ruffin" },
+    { "name": "Marine Tondelier" },
+    { "name": "Éric Zemmour" }
+  ]
+}
