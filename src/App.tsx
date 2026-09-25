@@ -40,7 +40,7 @@ export default function App() {
   const openDetail = useCallback((it: FactCheck) => setStack([it]), []);
   const openRelated = useCallback((it: FactCheck) => setStack((s) => [...s, it]), []);
   const closeDetail = useCallback(() => setStack((s) => s.slice(0, -1)), []);
-  // Rubrique Présidentielle (onglet Fil) : null = fermée, '' = liste, sinon un candidat.
+  // Rubrique Présidentielle (onglet Fil) : null = fermée, '' = tous les candidats, sinon un candidat.
   const [election, setElection] = useState<string | null>(null);
   const [seen, setSeen] = useState<SeenState | null>(() => load<SeenState | null>('seen', null));
   const [shared, setShared] = useState<SharedContent | null>(null);
@@ -101,8 +101,7 @@ export default function App() {
     if (!isNative) return;
     const sub = CapApp.addListener('backButton', () => {
       if (nav.current.detail) setStack((s) => s.slice(0, -1));
-      else if (nav.current.tab === 'feed' && nav.current.election) setElection('');
-      else if (nav.current.tab === 'feed' && nav.current.election === '') setElection(null);
+      else if (nav.current.tab === 'feed' && nav.current.election !== null) setElection(null);
       else if (nav.current.tab !== 'feed') setTab('feed');
       else CapApp.exitApp();
     });

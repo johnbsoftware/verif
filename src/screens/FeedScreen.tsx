@@ -25,7 +25,7 @@ interface Props {
   notice: string | null;
   /** Vérifications arrivées avec la dernière collecte (repère « Nouveau »). */
   freshIds: Set<string>;
-  /** Rubrique Présidentielle : null = fermée, '' = liste des candidats, sinon le candidat affiché. */
+  /** Rubrique Présidentielle : null = fermée, '' = tous les candidats, sinon le candidat choisi. */
   election: string | null;
   onElection: (v: string | null) => void;
   onOpen: (it: FactCheck) => void;
