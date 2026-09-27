@@ -70,3 +70,57 @@ if (fresh.length) {
 } else {
   console.log('\nAucun nouvel éditeur francophone : sources.json est à jour.');
 }
+
+// --- 2e partie : vérificateurs francophones connus, testés un par un -------------------------
+// Signataires IFCN / EFCSN ou rubriques de grands médias. Seuls ceux qui publient le balisage
+// ClaimReview sont recensés par Google : c'est ce que ce test vérifie.
+const CANDIDATES = [
+  { site: 'francetvinfo.fr', name: 'Vrai ou Fake (franceinfo)', country: 'France' },
+  { site: 'lemonde.fr', name: 'Les Décodeurs (Le Monde)', country: 'France' },
+  { site: 'liberation.fr', name: 'CheckNews (Libération)', country: 'France' },
+  { site: 'lessurligneurs.eu', name: 'Les Surligneurs', country: 'France' },
+  { site: 'observers.france24.com', name: 'Les Observateurs (France 24)', country: 'France' },
+  { site: 'sciencefeedback.co', name: 'Science Feedback', country: 'France' },
+  { site: 'rtbf.be', name: 'Faky (RTBF)', country: 'Belgique' },
+  { site: 'ici.radio-canada.ca', name: 'Les Décrypteurs (Radio-Canada)', country: 'Canada' },
+  { site: 'sciencepresse.qc.ca', name: 'Détecteur de rumeurs (Agence Science-Presse)', country: 'Canada' },
+  { site: 'rts.ch', name: 'RTS', country: 'Suisse' },
+  { site: 'africacheck.org', name: 'Africa Check', country: 'Afrique' },
+  { site: 'pesacheck.org', name: 'PesaCheck', country: 'Afrique' },
+  { site: 'congocheck.net', name: 'Congo Check', country: 'RD Congo' },
+];
+
+async function countSite(site) {
+  let n = 0;
+  let pageToken;
+  for (let page = 0; page < 4; page++) {
+    const q = new URLSearchParams({ reviewPublisherSiteFilter: site, maxAgeDays: String(MAX_AGE_DAYS), pageSize: '50', key });
+    if (pageToken) q.set('pageToken', pageToken);
+    const res = await fetch(`${API}?${q}`);
+    if (!res.ok) return `HTTP ${res.status}`;
+    const data = await res.json();
+    n += (data.claims ?? []).length;
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
+  }
+  return n;
+}
+
+console.log(`\nVérificateurs francophones testés un par un (vérifications sur ${MAX_AGE_DAYS} jours) :\n`);
+const toAdd = [];
+for (const c of CANDIDATES) {
+  const n = await countSite(c.site);
+  const mark = known.has(c.site) ? '*' : ' ';
+  console.log(`${mark} ${String(n).padStart(4)}  ${c.site.padEnd(28)} ${c.name}`);
+  if (typeof n === 'number' && n >= 3 && !known.has(c.site)) toAdd.push(c);
+}
+if (toAdd.length) {
+  console.log('\nÀ ajouter (au moins 3 vérifications) — lignes prêtes à coller dans collector/sources.json :\n');
+  for (const c of toAdd) console.log(`    ${JSON.stringify({ site: c.site, name: c.name, country: c.country, lang: 'fr' })},`);
+}
+
+console.log('\nSources actuelles de sources.json :\n');
+for (const s of sources) {
+  const n = await countSite(s.site);
+  console.log(`  ${String(n).padStart(4)}  ${s.site.padEnd(28)} ${s.name}${n === 0 ? '   ← aucune vérification en 90 jours : à retirer ?' : ''}`);
+}
