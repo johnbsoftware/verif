@@ -84,7 +84,7 @@ Obligatoire avant le test fermé et la production. Réponses pour Vérif :
 | **Identifiant publicitaire** | Non (l'autorisation AD_ID est retirée dans le manifeste depuis la 1.3.2) |
 | **Classification du contenu** | Catégorie « Référence, actualités ou éducation » ; aucune violence, sexualité, langage grossier, drogue ; pas d'interaction entre utilisateurs, pas de partage de position, pas d'achats → PEGI 3 / Tous publics attendu |
 | **Public cible** | **18 ans et plus uniquement** (évite les exigences « Familles » qui ont bloqué MiniSeries) ; appli non attrayante pour les enfants : Non |
-| **Appli d'actualités** | **Oui** (catégorie Actualités) : chaque vérification cite l'organisme source, l'éditeur et son contact figurent sur la fiche |
+| **Appli d'actualités** | **Oui**, agrégateur, catégorie Commerciale/Privée ; URL des coordonnées : `https://johnbsoftware.github.io/verif/contact.html` |
 | **Applis gouvernementales** | Non |
 | **Fonctionnalités financières** | Mon appli ne propose aucune fonctionnalité financière |
 | **Santé** | Mon appli n'a aucune fonctionnalité de santé |
@@ -110,7 +110,11 @@ La lecture du texte des images (ML Kit, via les services Google Play) envoie à 
 ## Étape 6 — Fiche principale du Play Store (Développer l'audience → Présence sur le Play Store)
 
 **Coordonnées et catégorie** (Paramètres de la fiche) : catégorie **Actualités et magazines**,
-e-mail `johnb.software@gmail.com`, site web `https://johnbsoftware.github.io/verif/`.
+e-mail `johnb.software@gmail.com`, **site web `https://johnbsoftware.github.io/verif/`** (obligatoire pour une appli d'actualités).
+
+> Règle « Actualités » (refus du 28/09/2026, corrigé en 1.3.3) : l'appli doit avoir une rubrique « Nous contacter » facile
+> à trouver (bouton ⓘ en haut du fil, section « Nous contacter » dans Filtres, pied du fil) et le site une page contact
+> (`contact.html`) avec l'e-mail.
 
 **Fiche principale** :
 

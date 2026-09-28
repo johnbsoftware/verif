@@ -25,3 +25,8 @@ export const STALE_AFTER_MS = 36 * 60 * 60 * 1000;
 
 /** Politique de confidentialité, publiée avec le flux sur GitHub Pages. */
 export const PRIVACY_URL = 'https://johnbsoftware.github.io/verif/confidentialite.html';
+
+/** Contact de l'éditeur : exigé par la règle Google Play « Actualités » (appli, site et fiche Play Store). */
+export const CONTACT_EMAIL = 'johnb.software@gmail.com';
+export const SITE_URL = 'https://johnbsoftware.github.io/verif/';
+export const CONTACT_URL = 'https://johnbsoftware.github.io/verif/contact.html';

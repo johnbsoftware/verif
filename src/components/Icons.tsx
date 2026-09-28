@@ -29,4 +29,7 @@ export const People = ({ size = 14 }: P) => (
 export const ImageIcon = ({ size = 18 }: P) => (
   <svg {...base(size)}><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.8" /><path d="M20.5 16l-5-5-8.5 8.5" /></svg>
 );
+export const Info = ({ size = 20 }: P) => (
+  <svg {...base(size)}><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5M12 7.6v.2" strokeWidth={2.2} /></svg>
+);
 export const Refresh = ({ size = 16 }: P) => <svg {...base(size)}><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>;

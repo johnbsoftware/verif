@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { App as CapApp } from '@capacitor/app';
 import type { Feed, Settings } from '../types';
-import { PRIVACY_URL, THEMES } from '../config';
+import { CONTACT_EMAIL, PRIVACY_URL, SITE_URL, THEMES } from '../config';
 import { isNative, openArticle } from '../lib/native';
 import { External } from '../components/Icons';
 import { plural, whenLabel } from '../lib/format';
@@ -157,6 +157,30 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
             <p className="muted small">Données : Google Fact Check Tools (ClaimReview).</p>
           </section>
         )}
+
+        <section className="stack-8" id="contact">
+          <h2 className="section-title">Nous contacter</h2>
+          <div className="group">
+            <a className="group-row about-row" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Vérif')}`}>
+              <span className="stack-2">
+                E-mail
+                <span className="muted small">{CONTACT_EMAIL}</span>
+              </span>
+              <External />
+            </a>
+            <button className="group-row about-row" onClick={() => openArticle(SITE_URL)}>
+              <span className="stack-2">
+                Site web
+                <span className="muted small">{SITE_URL.replace(/^https:\/\//, '')}</span>
+              </span>
+              <External />
+            </button>
+          </div>
+          <p className="muted small">
+            Éditeur : JohnB Software. Vérif rassemble les vérifications publiées par les organismes listés dans « Sources » ;
+            chacune renvoie vers l'article original de son auteur.
+          </p>
+        </section>
 
         <section className="stack-8">
           <h2 className="section-title">À propos</h2>

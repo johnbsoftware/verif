@@ -181,6 +181,10 @@ export default function App() {
             onElection={setElection}
             onOpen={openDetail}
             onOpenFilters={() => setTab('filters')}
+            onContact={() => {
+              setTab('filters');
+              setTimeout(() => document.getElementById('contact')?.scrollIntoView({ block: 'start' }), 50);
+            }}
             onRefresh={() => refresh(true)}
           />
         </div>

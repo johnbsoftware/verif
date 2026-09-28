@@ -265,3 +265,9 @@ button:disabled { opacity: 0.55; cursor: default; }
 .picker select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .picker-chevron { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--accent); pointer-events: none; display: inline-flex; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Contact (exigence Google Play « Actualités », 1.3.3) */
+a.group-row { color: var(--ink); text-decoration: none; }
+.feed-footer { margin-top: 24px; padding: 16px 4px 8px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.5; color: var(--muted); }
+.feed-footer p { margin: 0 0 6px; }
+.feed-footer a, .inline-link { color: var(--accent); font: inherit; text-decoration: underline; background: none; padding: 0; }

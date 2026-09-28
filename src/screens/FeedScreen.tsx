@@ -4,10 +4,10 @@ import { applyFilters, countriesLabel, groupByDay, type VerdictFilter } from '..
 import { plural, todayLabel, whenLabel } from '../lib/format';
 import { isStale, remoteConfigured } from '../data/feed';
 import { ClaimCard } from '../components/ClaimCard';
-import { Chevron, Close, Globe, People, Refresh, Search } from '../components/Icons';
+import { Chevron, Close, Globe, Info, People, Refresh, Search } from '../components/Icons';
 import { socialOf } from '../data/social';
 import { groupSimilar } from '../data/groups';
-import { THEMES } from '../config';
+import { CONTACT_EMAIL, THEMES } from '../config';
 import { ElectionView } from './ElectionView';
 
 const VERDICTS: { id: VerdictFilter; label: string }[] = [
@@ -30,10 +30,12 @@ interface Props {
   onElection: (v: string | null) => void;
   onOpen: (it: FactCheck) => void;
   onOpenFilters: () => void;
+  /** Ouvre « Nous contacter » (onglet Filtres). */
+  onContact: () => void;
   onRefresh: () => void;
 }
 
-export function FeedScreen({ feed, settings, allCountries, loading, notice, freshIds, election, onElection, onOpen, onOpenFilters, onRefresh }: Props) {
+export function FeedScreen({ feed, settings, allCountries, loading, notice, freshIds, election, onElection, onOpen, onOpenFilters, onContact, onRefresh }: Props) {
   const [theme, setTheme] = useState('Tout');
   const [verdict, setVerdict] = useState<VerdictFilter>('tous');
   const [search, setSearch] = useState('');
@@ -89,11 +91,16 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
             <span className="muted small">{todayLabel()}</span>
             <h1 className="brand">Vérif</h1>
           </div>
+          <div className="row gap-8">
+          <button className="icon-btn" onClick={onContact} aria-label="À propos et nous contacter" title="À propos et nous contacter">
+            <Info />
+          </button>
           <button className="pill" onClick={onOpenFilters} aria-label="Pays et filtres">
             <Globe />
             {countriesLabel(settings.countries, allCountries)}
             <Chevron />
           </button>
+          </div>
         </div>
         <label className="search">
           <Search />
@@ -185,6 +192,17 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
         )}
         </>
         )}
+
+        <footer className="feed-footer">
+          <p>
+            Vérif rassemble les vérifications d'organismes de fact-checking reconnus ; chaque carte cite sa source.
+          </p>
+          <p>
+            <strong>Nous contacter</strong> : <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Vérif')}`}>{CONTACT_EMAIL}</a>
+            {' · '}
+            <button className="inline-link" onClick={onContact}>Contact, sources et confidentialité</button>
+          </p>
+        </footer>
       </main>
     </div>
   );
