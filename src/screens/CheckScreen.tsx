@@ -4,7 +4,8 @@ import type { SharedContent } from '../lib/shareInbox';
 import { canPickImage, downloadImage, localImageSrc, pickImage, readImageText, searchImageWithLens } from '../lib/shareInbox';
 import { openArticle } from '../lib/native';
 import { lensUrlFor, previewAvailable, previewLink, type LinkPreview } from '../lib/linkPreview';
-import { cleanOcrText, extractUrls, factCheckExplorerUrl, findMatches, suggestedQuery, webSearchUrl } from '../data/match';
+import { cleanOcrText, extractUrls, findMatches, suggestedQuery } from '../data/match';
+import { checkersSearchUrl, explorerUrl, googleUrl, keyTerms } from '../data/terms';
 import { ClaimCard } from '../components/ClaimCard';
 import { Close, External, ImageIcon, Search } from '../components/Icons';
 
@@ -31,6 +32,8 @@ export function CheckScreen({ feed, shared, onClearShared, onPicked, onOpen }: P
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
+  // Mots-clés pour les moteurs externes : 8 proposés, les 5 plus importants cochés ; touchez pour ajuster.
+  const [off, setOff] = useState<Set<string>>(new Set());
   const choose = async () => {
     setPickError(null);
     try {
@@ -102,6 +105,19 @@ export function CheckScreen({ feed, shared, onClearShared, onPicked, onOpen }: P
     }
     return () => { cancelled = true; };
   }, [shared]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const terms = useMemo(() => keyTerms(submitted, 8), [submitted]);
+  const best = useMemo(() => new Set(keyTerms(submitted, 5)), [submitted]);
+  useEffect(() => {
+    setOff(new Set(terms.filter((t) => !best.has(t))));
+  }, [terms, best]);
+  const chosen = terms.filter((t) => !off.has(t));
+  const toggleTerm = (t: string) => {
+    const next = new Set(off);
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
+    setOff(next);
+  };
 
   const readFailed = onlyLink && !reading && !preview?.text && ocr !== 'found' && ocr !== 'reading';
   const matches = useMemo(() => (submitted ? findMatches(submitted, feed?.items ?? []) : []), [submitted, feed]);
@@ -247,16 +263,35 @@ export function CheckScreen({ feed, shared, onClearShared, onPicked, onOpen }: P
           </section>
         )}
 
-        {submitted && (
+        {submitted && terms.length > 0 && (
           <section className="stack-10">
             <h2 className="section-title">Chercher plus loin</h2>
-            <button className="secondary" onClick={() => openArticle(factCheckExplorerUrl(submitted))}>
+            <p className="muted small">
+              Les moteurs trouvent avec quelques mots-clés, pas avec une phrase entière. Touchez un mot pour l'ajouter ou le retirer.
+            </p>
+            <div className="wrap" role="group" aria-label="Mots-clés">
+              {terms.map((t) => (
+                <button key={t} className={`chip${chosen.includes(t) ? ' chip-on' : ''}`} aria-pressed={chosen.includes(t)} onClick={() => toggleTerm(t)}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <button className="primary" disabled={!chosen.length} onClick={() => openArticle(checkersSearchUrl(chosen))}>
+              Chercher chez les vérificateurs <External />
+            </button>
+            <p className="muted small">
+              Recherche Google limitée aux sites de vérification (AFP, TF1 Info, 20 Minutes, franceinfo, Le Monde, Libération…).
+            </p>
+            <button className="secondary" disabled={!chosen.length} onClick={() => openArticle(explorerUrl(chosen))}>
               Google Fact Check Explorer <External />
             </button>
-            <p className="muted small">Toutes les vérifications publiées dans le monde depuis des années.</p>
-            <button className="secondary" onClick={() => openArticle(webSearchUrl(submitted))}>
+            <button className="secondary" disabled={!chosen.length} onClick={() => openArticle(googleUrl(chosen))}>
               Recherche Google <External />
             </button>
+            <p className="fineprint">
+              Toujours rien ? Le contenu n'a peut-être jamais été vérifié. Ça ne veut pas dire qu'il est vrai : appliquez
+              les bons réflexes ci-dessous.
+            </p>
           </section>
         )}
 

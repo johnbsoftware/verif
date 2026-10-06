@@ -2,6 +2,7 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import type { FactCheck } from '../types';
 import { fold } from '../data/filters';
 import { load, save } from '../data/storage';
+import { extractExplanation } from './explain';
 
 // Certains organismes (l'AFP) refusent les lectures venant des serveurs de GitHub :
 // pour eux, le résumé est lu depuis le téléphone, à l'ouverture de la vérification,
@@ -69,7 +70,29 @@ export function cachedSummary(id: string): string | undefined {
   return load<Cache>('summaries', {})[id];
 }
 
-export async function fetchSummaryOnDevice(item: FactCheck): Promise<string | null> {
+type WhyCache = Record<string, string[]>; // id -> extraits « Pourquoi ? » ([] = rien trouvé)
+
+/** Extraits « Pourquoi ? » déjà lus sur ce téléphone ; undefined si l'article n'a jamais été lu. */
+export function cachedExplanation(id: string): string[] | undefined {
+  return load<WhyCache>('explanations', {})[id];
+}
+
+function keepLast<T>(cache: Record<string, T>, max = 500): Record<string, T> {
+  const keys = Object.keys(cache);
+  for (const k of keys.slice(0, Math.max(0, keys.length - max))) delete cache[k];
+  return cache;
+}
+
+export interface ArticleReading {
+  summary: string | null;
+  why: string[];
+}
+
+/**
+ * Lit l'article sur le téléphone (comme un navigateur) : son résumé d'aperçu et les passages
+ * qui justifient le verdict. Les deux sont gardés en cache. null si l'article est injoignable.
+ */
+export async function readArticleOnDevice(item: FactCheck): Promise<ArticleReading | null> {
   if (!canFetchOnDevice) return null;
   try {
     const r = await CapacitorHttp.get({
@@ -79,14 +102,15 @@ export async function fetchSummaryOnDevice(item: FactCheck): Promise<string | nu
       readTimeout: 10000,
     });
     if (r.status < 200 || r.status >= 400 || typeof r.data !== 'string') return null;
-    const summary = extractSummaryFromHtml(r.data, item.title ?? '');
-    const cache = load<Cache>('summaries', {});
-    cache[item.id] = summary ?? '';
-    // On garde au plus 500 résumés (les plus récents ajoutés).
-    const keys = Object.keys(cache);
-    for (const k of keys.slice(0, Math.max(0, keys.length - 500))) delete cache[k];
-    save('summaries', cache);
-    return summary;
+    const summary = item.summary || extractSummaryFromHtml(r.data, item.title ?? '');
+    const why = extractExplanation(r.data, item.title ?? '', summary ?? '');
+    const sums = load<Cache>('summaries', {});
+    sums[item.id] = summary ?? '';
+    save('summaries', keepLast(sums));
+    const whys = load<WhyCache>('explanations', {});
+    whys[item.id] = why;
+    save('explanations', keepLast(whys));
+    return { summary, why };
   } catch {
     return null; // réseau indisponible : on retentera à la prochaine ouverture
   }

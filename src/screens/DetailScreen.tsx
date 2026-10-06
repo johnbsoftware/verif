@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FactCheck } from '../types';
-import { cachedSummary, canFetchOnDevice, fetchSummaryOnDevice } from '../lib/articleSummary';
+import { cachedExplanation, cachedSummary, canFetchOnDevice, readArticleOnDevice } from '../lib/articleSummary';
 import { longDate } from '../lib/format';
 import { socialLabel } from '../data/social';
 import { openArticle, shareCheck } from '../lib/native';
@@ -8,6 +8,9 @@ import { VerdictBadge } from '../components/VerdictBadge';
 import { ClaimCard } from '../components/ClaimCard';
 import { Back, Bookmark, External, ShareIcon } from '../components/Icons';
 import { translateTexts } from '../lib/verifNative';
+
+/** Texte affiché (traduit le cas échéant) et texte d'origine. */
+interface Pair { shown: string; original: string }
 
 interface Props {
   related?: FactCheck[];
@@ -24,45 +27,55 @@ interface Props {
 export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onToggleSave, related = [], onOpen, onSources }: Props) {
   // Vérification traduite : la pastille bascule vers le texte d'origine.
   const [showOriginal, setShowOriginal] = useState(false);
-  // Résumé : celui de la collecte, sinon celui déjà lu sur ce téléphone, sinon lecture de l'article.
-  // Pour une vérification traduite, le résumé lu sur le téléphone (en anglais) est traduit à la volée.
-  const [summary, setSummary] = useState<{ shown: string; original: string } | null>(null);
+  // Ce que l'article explique : son résumé d'aperçu et les passages qui justifient le verdict
+  // (« Pourquoi ? »), lus une fois sur le téléphone puis gardés en cache. Pour une vérification
+  // traduite, les textes (en anglais) sont traduits à la volée ; `original` garde la version d'origine.
+  const [reading, setReading] = useState<{ summary: Pair | null; why: Pair[] }>({ summary: null, why: [] });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setShowOriginal(false);
     // Remis à zéro à chaque vérification : une lecture annulée (vérification quittée
-    // avant la fin) ne doit pas laisser « Lecture du résumé… » affiché.
+    // avant la fin) ne doit pas laisser « Lecture de l'article… » affiché.
     setLoading(false);
-    const finish = async (orig: string | null) => {
-      if (!orig) return setSummary(null);
-      if (!item.original) return setSummary({ shown: orig, original: orig });
-      try {
-        const [t] = await translateTexts([orig]);
-        if (!cancelled) setSummary({ shown: t || orig, original: orig });
-      } catch {
-        if (!cancelled) setSummary({ shown: orig, original: orig });
+    const translated = !!item.original;
+    const feedSummary: Pair | null = item.summary
+      ? { shown: item.summary, original: item.original?.summary || item.summary }
+      : null;
+
+    const show = async (summary: string | null, why: string[]) => {
+      // Résumé déjà traduit par le fil : seuls les textes lus sur le téléphone restent à traduire.
+      const toTranslate = [...(feedSummary ? [] : summary ? [summary] : []), ...why];
+      let out = toTranslate;
+      if (translated && toTranslate.length) {
+        try { out = await translateTexts(toTranslate); } catch { out = toTranslate; }
       }
+      if (cancelled) return;
+      const offset = feedSummary || !summary ? 0 : 1;
+      setReading({
+        summary: feedSummary ?? (summary ? { shown: out[0] || summary, original: summary } : null),
+        why: why.map((w, k) => ({ shown: out[offset + k] || w, original: w })),
+      });
     };
-    if (item.summary) {
-      setSummary({ shown: item.summary, original: item.original?.summary || item.summary });
+
+    setReading({ summary: feedSummary, why: [] });
+    const knownWhy = cachedExplanation(item.id);
+    if (knownWhy !== undefined) {
+      const known = cachedSummary(item.id);
+      show(item.original?.summary || item.summary || known || null, knownWhy);
       return () => { cancelled = true; };
     }
-    setSummary(null);
-    const known = cachedSummary(item.id); // '' = déjà essayé sans succès
-    if (known !== undefined) {
-      finish(known || null);
-      return () => { cancelled = true; };
-    }
-    if (!canFetchOnDevice) return;
+    if (!canFetchOnDevice) return () => { cancelled = true; };
     setLoading(true);
-    // Le titre d'origine sert à écarter un résumé qui ne ferait que le répéter.
-    const source = item.original ? { ...item, title: item.original.title } : item;
-    fetchSummaryOnDevice(source).then((s) => {
+    // L'article est lu dans sa langue : titre et résumé d'origine (pour écarter les répétitions).
+    const source = item.original
+      ? { ...item, title: item.original.title, summary: item.original.summary ?? null }
+      : item;
+    readArticleOnDevice(source).then((r) => {
       if (cancelled) return;
       setLoading(false);
-      finish(s);
+      if (r) show(r.summary, r.why);
     });
     return () => { cancelled = true; };
   }, [item]);
@@ -71,7 +84,9 @@ export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onTogg
   const claim = orig?.claim ?? item.claim;
   const rating = orig?.rating ?? item.rating;
   const title = orig ? orig.title : item.title;
-  const summaryText = summary ? (orig ? summary.original : summary.shown) : null;
+  const pick = (p: Pair) => (orig ? p.original : p.shown);
+  const summaryText = reading.summary ? pick(reading.summary) : null;
+  const why = reading.why.map(pick);
 
   return (
     <div className="screen detail" key={item.id}>
@@ -111,17 +126,40 @@ export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onTogg
         </div>
 
         <section className="panel">
-          <h2 className="section-title">Conclusion du vérificateur</h2>
+          <h2 className="section-title">Verdict de l'organisme</h2>
           <p className="panel-rating">{rating || 'Voir l’article'}</p>
           {title && <p className="panel-title">{title}</p>}
-          {loading && <p className="muted small">Lecture du résumé de l'article…</p>}
-          {summaryText && (
-            <>
-              <p className="panel-summary">{summaryText}</p>
-              <p className="fineprint">Résumé publié par {item.publisher} avec son article.</p>
-            </>
-          )}
         </section>
+
+        {(loading || why.length > 0) && (
+          <section className="panel">
+            <h2 className="section-title">Pourquoi ?</h2>
+            {loading && <p className="muted small">Lecture de l'article…</p>}
+            {why.length > 0 && (
+              <>
+                <ul className="why-list">
+                  {why.map((w) => <li key={w}>{w}</li>)}
+                </ul>
+                <p className="fineprint">
+                  Extraits de l'article de {item.publisher}{item.original && !orig ? ', traduits de l’anglais' : ''}.
+                  Les preuves complètes (documents, images d'origine) sont dans l'article.
+                </p>
+              </>
+            )}
+          </section>
+        )}
+
+        {summaryText && (
+          <section className="panel">
+            <h2 className="section-title">Résumé de l'article</h2>
+            <p className="panel-summary">{summaryText}</p>
+            <p className="fineprint">Texte d'aperçu publié par {item.publisher} avec son article.</p>
+          </section>
+        )}
+
+        {!loading && !why.length && (
+          <p className="muted small">L'explication détaillée du verdict se trouve dans l'article complet ci-dessous.</p>
+        )}
 
         <section className="source">
           <h2 className="section-title">Vérifié par</h2>

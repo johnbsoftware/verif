@@ -302,3 +302,10 @@ a.group-row { color: var(--ink); text-decoration: none; }
 .intro-dots span.on { width: 22px; background: var(--accent); }
 .tag-ifcn { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--vrai-bg, #dff1e6); color: var(--vrai-fg, #1c6b3e); font-weight: 600; vertical-align: 1px; }
 .detail .wrap { flex-wrap: wrap; }
+
+/* Pourquoi ? (1.4.1) */
+.why-list { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.why-list li { position: relative; padding-left: 14px; font-size: 16px; line-height: 1.55; color: var(--ink); }
+.why-list li::before { content: ''; position: absolute; left: 0; top: 0.35em; bottom: 0.35em; width: 3px; border-radius: 2px; background: var(--accent); }
+.panel + .panel { margin-top: 0; }
+.panel > .section-title + .panel-summary { border-top: none; padding-top: 0; }
