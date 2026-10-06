@@ -13,8 +13,13 @@
 name: Collecte quotidienne
 
 on:
+  # GitHub ne garantit pas l'heure : aux heures rondes et aux demi-heures, très demandées, les
+  # tâches planifiées partent souvent avec des heures de retard (le 4/10/2026 : 12 h 50 au lieu de 6 h 30).
+  # D'où une minute « creuse » et un 2e passage de rattrapage ; s'ils tournent tous les deux, le
+  # second complète simplement le flux (aucun doublon : les vérifications sont fusionnées).
   schedule:
-    - cron: '30 4 * * *'   # 6 h 30 à Paris l'été, 5 h 30 l'hiver
+    - cron: '7 4 * * *'    # 6 h 07 à Paris l'été, 5 h 07 l'hiver
+    - cron: '43 6 * * *'   # rattrapage : 8 h 43 l'été, 7 h 43 l'hiver
   workflow_dispatch:       # bouton « Run workflow » pour lancer à la main
 
 permissions:
