@@ -21,6 +21,7 @@ interface VerifNativePlugin {
   writeFile(options: { name: string; data: string }): Promise<void>;
   configureDigest(options: DigestConfig): Promise<void>;
   setKnownIds(options: { ids: string[] }): Promise<void>;
+  translate(options: { texts: string[] }): Promise<{ texts: string[] }>;
 }
 
 const VerifNative = registerPlugin<VerifNativePlugin>('VerifNative');
@@ -65,4 +66,11 @@ export async function setKnownIds(ids: string[]): Promise<void> {
   } catch {
     /* ignoré */
   }
+}
+
+/** Traduction anglais → français sur le téléphone (ML Kit). Lève une erreur si impossible. */
+export async function translateTexts(texts: string[]): Promise<string[]> {
+  if (!nativeAvailable) throw new Error('indisponible');
+  const r = await VerifNative.translate({ texts });
+  return r.texts;
 }

@@ -11,6 +11,10 @@ export const BUNDLED_FEED = './feed.json';
 /** En dessous de cet âge, le cache suffit et on ne retélécharge pas au retour dans l'appli. */
 export const REFRESH_AFTER_MS = 60 * 60 * 1000;
 
+/** Données de plus de 20 h (la collecte du jour est attendue) : on revérifie dès 5 min. */
+export const EXPECT_NEW_AFTER_MS = 20 * 60 * 60 * 1000;
+export const RECHECK_AFTER_MS = 5 * 60 * 1000;
+
 export const THEMES = ['Santé', 'Politique', 'Climat & catastrophes', 'Économie', 'Sciences', 'International', 'Société', 'Culture & sport', 'Divers'];
 
 /** Ancien nom de thème → nouveau (réglages, enregistrés et cache d'avant la 1.2.0). */
@@ -30,3 +34,8 @@ export const PRIVACY_URL = 'https://johnbsoftware.github.io/verif/confidentialit
 export const CONTACT_EMAIL = 'johnb.software@gmail.com';
 export const SITE_URL = 'https://johnbsoftware.github.io/verif/';
 export const CONTACT_URL = 'https://johnbsoftware.github.io/verif/contact.html';
+
+/** Fiche Play Store, ajoutée aux vérifications partagées depuis l'appli. */
+export const STORE_URL = 'https://play.google.com/store/apps/details?id=fr.johnbsoftware.verif';
+export const IFCN_URL = 'https://ifcncodeofprinciples.poynter.org/signatories';
+export const EFCSN_URL = 'https://efcsn.com/';

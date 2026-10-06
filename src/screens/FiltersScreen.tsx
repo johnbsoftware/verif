@@ -7,14 +7,26 @@ import { External } from '../components/Icons';
 import { plural, whenLabel } from '../lib/format';
 import { remoteConfigured } from '../data/feed';
 import { isFrench } from '../data/filters';
+import type { TranslationStatus } from '../data/useTranslations';
 
 interface Props {
   feed: Feed | null;
   settings: Settings;
   allCountries: string[];
+  translation: { status: TranslationStatus; pending: number; retry: () => void };
   onChange: (s: Settings) => void;
   onDigest: (on: boolean) => void;
+  onIntro: () => void;
+  onSources: () => void;
   onDone: () => void;
+}
+
+function translationNote(on: boolean, t: { status: TranslationStatus; pending: number }): string {
+  if (!on) return 'Les vérifications en anglais restent en anglais';
+  if (t.status === 'download') return 'Téléchargement du traducteur (environ 30 Mo, une seule fois)…';
+  if (t.status === 'working' && t.pending) return `Traduction en cours : encore ${t.pending}…`;
+  if (t.status === 'error') return 'Traduction impossible pour l’instant (connexion nécessaire la première fois)';
+  return 'Sur le téléphone, sans envoyer le texte. Touchez « Traduit » pour voir l’original';
 }
 
 function toggle(list: string[], value: string, universe: string[]): string[] {
@@ -25,7 +37,7 @@ function toggle(list: string[], value: string, universe: string[]): string[] {
   return next.length === universe.length ? [] : next;
 }
 
-export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest, onDone }: Props) {
+export function FiltersScreen({ feed, settings, allCountries, translation, onChange, onDigest, onIntro, onSources, onDone }: Props) {
   const [version, setVersion] = useState<string | null>(null);
   useEffect(() => {
     if (isNative) CapApp.getInfo().then((i) => setVersion(`${i.version} (${i.build})`)).catch(() => {});
@@ -74,7 +86,24 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
               </span>
               <input type="checkbox" checked={settings.english} onChange={(e) => onChange({ ...settings, english: e.target.checked })} />
             </label>
+            {translation.status !== 'unavailable' && (
+              <label className="group-row tall">
+                <span className="stack-2">
+                  Traduire en français
+                  <span className="muted small">{translationNote(settings.translate, translation)}</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={settings.translate}
+                  disabled={!settings.english}
+                  onChange={(e) => onChange({ ...settings, translate: e.target.checked })}
+                />
+              </label>
+            )}
           </div>
+          {settings.translate && translation.status === 'error' && (
+            <button className="link-btn" onClick={translation.retry}>Réessayer la traduction</button>
+          )}
         </section>
 
         <section className="stack-8">
@@ -155,6 +184,7 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
               ))}
             </div>
             <p className="muted small">Données : Google Fact Check Tools (ClaimReview).</p>
+            <button className="link-btn" onClick={onSources}>Pourquoi ces sources ? Qui dit qu'elles sont fiables ?</button>
           </section>
         )}
 
@@ -185,6 +215,9 @@ export function FiltersScreen({ feed, settings, allCountries, onChange, onDigest
         <section className="stack-8">
           <h2 className="section-title">À propos</h2>
           <div className="group">
+            <button className="group-row about-row" onClick={onIntro}>
+              <span>Revoir la présentation</span>
+            </button>
             <button className="group-row about-row" onClick={() => openArticle(PRIVACY_URL)}>
               <span className="stack-2">
                 Confidentialité

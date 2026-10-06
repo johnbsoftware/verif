@@ -1,13 +1,76 @@
 {
-  "_lisezmoi": "Organismes interrogés chaque jour. Liste établie avec « npm run discover » le 23/09/2026 : seuls les éditeurs réellement recensés par Google Fact Check y figurent. Relancer npm run discover de temps en temps pour en découvrir de nouveaux.",
+  "_lisezmoi": "Organismes interrogés chaque jour. Liste établie avec « npm run discover » le 23/09/2026 : seuls les éditeurs réellement recensés par Google Fact Check y figurent. Relancer npm run discover de temps en temps pour en découvrir de nouveaux. Champ facultatif « about » (affiché dans la page « Pourquoi ces sources ? » de l'appli, sans nouvel APK) : media = rédaction ou groupe éditeur, ifcn = true seulement après vérification sur https://ifcncodeofprinciples.poynter.org/signatories, efcsn = idem sur https://efcsn.com, note = une phrase.",
   "sources": [
-    { "site": "factuel.afp.com", "name": "AFP Factuel", "country": "France", "lang": "fr" },
-    { "site": "tf1info.fr", "name": "Les Vérificateurs (TF1 Info)", "country": "France", "lang": "fr" },
-    { "site": "20minutes.fr", "name": "Fake Off (20 Minutes)", "country": "France", "lang": "fr" },
-    { "site": "poligraph.fr", "name": "Poligraph", "country": "France", "lang": "fr" },
-    { "site": "defacto-observatoire.fr", "name": "De Facto", "country": "France", "lang": "fr" },
-    { "site": "franceinfo.fr", "name": "Vrai ou Fake (franceinfo)", "country": "France", "lang": "fr" },
-    { "site": "beto.cd", "name": "Beto.cd", "country": "RD Congo", "lang": "fr" },
-    { "site": "factcheck.afp.com", "name": "AFP Fact Check", "country": "International", "lang": "en" }
+    {
+      "site": "factuel.afp.com",
+      "name": "AFP Factuel",
+      "country": "France",
+      "lang": "fr",
+      "about": {
+        "media": "Agence France-Presse",
+        "ifcn": true
+      }
+    },
+    {
+      "site": "tf1info.fr",
+      "name": "Les Vérificateurs (TF1 Info)",
+      "country": "France",
+      "lang": "fr",
+      "about": {
+        "media": "TF1 Info (groupe TF1)"
+      }
+    },
+    {
+      "site": "20minutes.fr",
+      "name": "Fake Off (20 Minutes)",
+      "country": "France",
+      "lang": "fr",
+      "about": {
+        "media": "20 Minutes"
+      }
+    },
+    {
+      "site": "poligraph.fr",
+      "name": "Poligraph",
+      "country": "France",
+      "lang": "fr"
+    },
+    {
+      "site": "defacto-observatoire.fr",
+      "name": "De Facto",
+      "country": "France",
+      "lang": "fr",
+      "about": {
+        "note": "Observatoire des fausses informations réunissant chercheurs, journalistes et éducateurs"
+      }
+    },
+    {
+      "site": "franceinfo.fr",
+      "name": "Vrai ou Fake (franceinfo)",
+      "country": "France",
+      "lang": "fr",
+      "about": {
+        "media": "franceinfo (service public)"
+      }
+    },
+    {
+      "site": "beto.cd",
+      "name": "Beto.cd",
+      "country": "RD Congo",
+      "lang": "fr",
+      "about": {
+        "note": "Média de vérification de République démocratique du Congo"
+      }
+    },
+    {
+      "site": "factcheck.afp.com",
+      "name": "AFP Fact Check",
+      "country": "International",
+      "lang": "en",
+      "about": {
+        "media": "Agence France-Presse (édition internationale, en anglais)",
+        "ifcn": true
+      }
+    }
   ]
 }

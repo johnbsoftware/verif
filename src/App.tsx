@@ -3,7 +3,7 @@ import { App as CapApp } from '@capacitor/app';
 import type { FactCheck, Feed, Settings, Tab } from './types';
 import { cachedFeed, migrateItem, refreshFeed } from './data/feed';
 import { load, save } from './data/storage';
-import { REFRESH_AFTER_MS, RENAMED_THEMES } from './config';
+import { EXPECT_NEW_AFTER_MS, RECHECK_AFTER_MS, REFRESH_AFTER_MS, RENAMED_THEMES } from './config';
 import { isNative, setDailyDigest, syncDigest } from './lib/native';
 import { setKnownIds } from './lib/verifNative';
 import { nextSeen, type SeenState } from './data/seen';
@@ -13,11 +13,15 @@ import { DetailScreen } from './screens/DetailScreen';
 import { FiltersScreen } from './screens/FiltersScreen';
 import { SavedScreen } from './screens/SavedScreen';
 import { CheckScreen } from './screens/CheckScreen';
+import { IntroScreen } from './screens/IntroScreen';
+import { SourcesScreen } from './screens/SourcesScreen';
 import { onShared, takeShared, type SharedContent } from './lib/shareInbox';
 import { TabBar } from './components/TabBar';
 import { relatedIndex } from './data/groups';
+import { useTranslations } from './data/useTranslations';
+import { stripTranslation } from './data/translate';
 
-const DEFAULT_SETTINGS: Settings = { countries: [], themes: [], dailyDigest: false, english: true, grouped: true, theme: 'system' };
+const DEFAULT_SETTINGS: Settings = { countries: [], themes: [], dailyDigest: false, english: true, grouped: true, theme: 'system', translate: true };
 /** Réglages enregistrés par une version précédente : thèmes renommés depuis. */
 function loadSettings(): Settings {
   const s = { ...DEFAULT_SETTINGS, ...load<Partial<Settings>>('settings', {}) };
@@ -44,6 +48,13 @@ export default function App() {
   const [election, setElection] = useState<string | null>(null);
   const [seen, setSeen] = useState<SeenState | null>(() => load<SeenState | null>('seen', null));
   const [shared, setShared] = useState<SharedContent | null>(null);
+  // Présentation : au premier lancement, puis à la demande (Filtres → À propos).
+  const [intro, setIntro] = useState(() => !load<boolean>('intro', false));
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const closeIntro = () => {
+    setIntro(false);
+    save('intro', true);
+  };
   const lastFetch = useRef(0);
 
   const feedRef = useRef<Feed | null>(feed);
@@ -62,7 +73,7 @@ export default function App() {
       if (r.error && r.origin !== 'remote') {
         setNotice(`Actualisation impossible à ${now} (${r.error}) : affichage des données ${whenLabel(r.feed.generatedAt)}.`);
       } else if (manual && before === r.feed.generatedAt) {
-        setNotice(`Vérifié à ${now} : déjà à jour (dernière collecte ${whenLabel(r.feed.generatedAt)}). La prochaine collecte a lieu chaque matin vers 6 h 30.`);
+        setNotice(`Vérifié à ${now} : déjà à jour (dernière collecte ${whenLabel(r.feed.generatedAt)}). La collecte a lieu chaque matin, en général entre 6 h et 9 h.`);
       } else if (manual) {
         setNotice(`Nouvelles vérifications chargées à ${now}.`);
       } else setNotice(null);
@@ -77,8 +88,14 @@ export default function App() {
   useEffect(() => {
     refresh();
     if (!isNative) return;
+    // Au retour dans l'appli : toutes les heures, ou dès 5 min si les données datent de plus de 20 h
+    // (la collecte du jour, parfois retardée par GitHub, a pu arriver entre-temps).
     const sub = CapApp.addListener('appStateChange', ({ isActive }) => {
-      if (isActive && Date.now() - lastFetch.current > REFRESH_AFTER_MS) refresh();
+      if (!isActive) return;
+      const since = Date.now() - lastFetch.current;
+      const generated = Date.parse(feedRef.current?.generatedAt ?? '');
+      const waitingForToday = !Number.isFinite(generated) || Date.now() - generated > EXPECT_NEW_AFTER_MS;
+      if (since > REFRESH_AFTER_MS || (waitingForToday && since > RECHECK_AFTER_MS)) refresh();
     });
     return () => { sub.then((h) => h.remove()); };
   }, [refresh]);
@@ -95,12 +112,14 @@ export default function App() {
   }, []);
 
   // Bouton retour Android : détail → liste → onglet Fil → quitter.
-  const nav = useRef({ detail, tab, election });
-  nav.current = { detail, tab, election };
+  const nav = useRef({ detail, tab, election, intro, sourcesOpen });
+  nav.current = { detail, tab, election, intro, sourcesOpen };
   useEffect(() => {
     if (!isNative) return;
     const sub = CapApp.addListener('backButton', () => {
-      if (nav.current.detail) setStack((s) => s.slice(0, -1));
+      if (nav.current.intro) closeIntroRef.current();
+      else if (nav.current.sourcesOpen) setSourcesOpen(false);
+      else if (nav.current.detail) setStack((s) => s.slice(0, -1));
       else if (nav.current.tab === 'feed' && nav.current.election !== null) setElection(null);
       else if (nav.current.tab !== 'feed') setTab('feed');
       else CapApp.exitApp();
@@ -114,6 +133,9 @@ export default function App() {
     if (settings.theme === 'system') delete root.dataset.theme;
     else root.dataset.theme = settings.theme;
   }, [settings.theme]);
+
+  const closeIntroRef = useRef(closeIntro);
+  closeIntroRef.current = closeIntro;
 
   const updateSettings = (s: Settings) => {
     setSettings(s);
@@ -149,13 +171,18 @@ export default function App() {
   }, [feed]); // eslint-disable-line react-hooks/exhaustive-deps
   const freshIds = useMemo(() => new Set(seen?.generatedAt === feed?.generatedAt ? seen?.fresh ?? [] : []), [seen, feed]);
 
+  // Vérifications en anglais traduites sur le téléphone ; `shown` est ce que l'appli affiche.
+  const tr = useTranslations(feed, saved, settings.translate);
+  const shown = tr.feed;
+
   const toggleSave = (it: FactCheck) => {
-    const next = saved.some((s) => s.id === it.id) ? saved.filter((s) => s.id !== it.id) : [it, ...saved];
+    // On enregistre la vérification telle que publiée (la traduction est refaite à l'affichage).
+    const next = saved.some((s) => s.id === it.id) ? saved.filter((s) => s.id !== it.id) : [stripTranslation(it), ...saved];
     setSaved(next);
     save('saved', next);
   };
 
-  const related = useMemo(() => relatedIndex(feed?.items ?? []), [feed]);
+  const related = useMemo(() => relatedIndex(shown?.items ?? []), [shown]);
 
   const allCountries = useMemo(() => {
     const set = new Set<string>([...(feed?.sources ?? []).map((s) => s.country), ...(feed?.items ?? []).map((i) => i.country)]);
@@ -171,7 +198,7 @@ export default function App() {
       <div className="tabs-area" hidden={!!detail}>
         <div className="tab-panel" hidden={tab !== 'feed'}>
           <FeedScreen
-            feed={feed}
+            feed={shown}
             settings={settings}
             allCountries={allCountries}
             loading={loading}
@@ -189,23 +216,28 @@ export default function App() {
           />
         </div>
         <div className="tab-panel" hidden={tab !== 'check'}>
-          <CheckScreen feed={feed} shared={shared} onClearShared={() => setShared(null)} onPicked={setShared} onOpen={openDetail} />
+          <CheckScreen feed={shown} shared={shared} onClearShared={() => setShared(null)} onPicked={setShared} onOpen={openDetail} />
         </div>
         <div className="tab-panel" hidden={tab !== 'saved'}>
-          <SavedScreen items={saved} onOpen={openDetail} />
+          <SavedScreen items={tr.saved} onOpen={openDetail} />
         </div>
         <div className="tab-panel" hidden={tab !== 'filters'}>
           <FiltersScreen
             feed={feed}
             settings={settings}
             allCountries={allCountries}
+            translation={{ status: tr.status, pending: tr.pending, retry: tr.retry }}
             onChange={updateSettings}
             onDigest={onDigest}
+            onIntro={() => setIntro(true)}
+            onSources={() => setSourcesOpen(true)}
             onDone={() => setTab('feed')}
           />
         </div>
         <TabBar tab={tab} onChange={setTab} savedCount={saved.length} />
       </div>
+
+      {intro && <IntroScreen settings={settings} onChange={updateSettings} onDigest={onDigest} onDone={closeIntro} />}
 
       {detail && (
         <DetailScreen
@@ -216,8 +248,11 @@ export default function App() {
           onToggleSave={toggleSave}
           related={settings.grouped ? related.get(detail.id) ?? [] : []}
           onOpen={openRelated}
+          onSources={() => setSourcesOpen(true)}
         />
       )}
+
+      {sourcesOpen && <SourcesScreen feed={feed} onBack={() => setSourcesOpen(false)} />}
     </div>
   );
 }

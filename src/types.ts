@@ -21,6 +21,15 @@ export interface FactCheck {
   reviewDate: string;
   /** Présidentielle : nom du candidat auteur de l'affirmation (collector/candidats.json). */
   candidate?: string;
+  /** Présent quand l'affichage est une traduction : le texte d'origine (anglais). */
+  original?: OriginalText;
+}
+
+export interface OriginalText {
+  claim: string;
+  title: string | null;
+  rating: string;
+  summary?: string | null;
 }
 
 export interface Election {
@@ -38,6 +47,8 @@ export interface FeedSource {
   fetchedToday: number;
   total: number;
   error?: string;
+  /** Présentation de l'organisme (collector/sources.json → « about »). */
+  about?: { media?: string; ifcn?: boolean; efcsn?: boolean; note?: string };
 }
 
 export interface Feed {
@@ -64,6 +75,8 @@ export interface Settings {
   grouped: boolean;
   /** Apparence : suit le téléphone, ou forcée. */
   theme: 'system' | 'light' | 'dark';
+  /** Traduire en français les vérifications en anglais (sur le téléphone). */
+  translate: boolean;
 }
 
 export type Tab = 'feed' | 'check' | 'saved' | 'filters';

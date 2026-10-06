@@ -8,6 +8,13 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
+import com.google.mlkit.common.model.DownloadConditions;
+import com.google.mlkit.nl.translate.TranslateLanguage;
+import com.google.mlkit.nl.translate.Translation;
+import com.google.mlkit.nl.translate.Translator;
+import com.google.mlkit.nl.translate.TranslatorOptions;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -16,15 +23,66 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import org.json.JSONArray;
 
 /**
  * Services natifs de Vérif (src/lib/verifNative.ts) :
  * - readFile / writeFile : fichiers du dossier privé de l'appli (le flux, trop gros pour les préférences) ;
- * - configureDigest / setKnownIds : réglages du rappel quotidien exécuté par {@link DigestWorker}.
+ * - configureDigest / setKnownIds : réglages du rappel quotidien exécuté par {@link DigestWorker} ;
+ * - translate : traduction anglais → français sur le téléphone (ML Kit, modèle d'environ 30 Mo
+ *   téléchargé une fois ; aucun texte n'est envoyé à un serveur).
  */
 @CapacitorPlugin(name = "VerifNative")
 public class VerifNativePlugin extends Plugin {
+
+    private Translator translator;
+
+    private synchronized Translator translator() {
+        if (translator == null) {
+            TranslatorOptions options = new TranslatorOptions.Builder()
+                .setSourceLanguage(TranslateLanguage.ENGLISH)
+                .setTargetLanguage(TranslateLanguage.FRENCH)
+                .build();
+            translator = Translation.getClient(options);
+        }
+        return translator;
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (translator != null) translator.close();
+        translator = null;
+        super.handleOnDestroy();
+    }
+
+    /**
+     * Traduit une liste de textes (même ordre en sortie ; texte vide → vide). Télécharge le modèle
+     * la première fois (Wi-Fi ou données mobiles). Erreur « download » si le téléchargement échoue.
+     */
+    @PluginMethod
+    public void translate(PluginCall call) {
+        JSArray input = call.getArray("texts", new JSArray());
+        final List<String> texts = new ArrayList<>();
+        for (int i = 0; i < input.length(); i++) texts.add(input.optString(i, ""));
+        final Translator t = translator();
+        t.downloadModelIfNeeded(new DownloadConditions.Builder().build())
+            .addOnSuccessListener(unused -> {
+                List<Task<String>> tasks = new ArrayList<>();
+                for (String text : texts) tasks.add(text.isEmpty() ? Tasks.forResult("") : t.translate(text));
+                Tasks.whenAllSuccess(tasks)
+                    .addOnSuccessListener(results -> {
+                        JSArray out = new JSArray();
+                        for (Object r : results) out.put(r == null ? "" : r.toString());
+                        JSObject res = new JSObject();
+                        res.put("texts", out);
+                        call.resolve(res);
+                    })
+                    .addOnFailureListener(e -> call.reject("Traduction impossible", "translate", e));
+            })
+            .addOnFailureListener(e -> call.reject("Téléchargement du traducteur impossible", "download", e));
+    }
 
     /** Nom simple uniquement (pas de « / » ni de « .. ») : on reste dans le dossier de l'appli. */
     private static String safeName(String name) {

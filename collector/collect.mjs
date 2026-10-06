@@ -279,8 +279,9 @@ export async function collect({ key, sources, election = null, previous, now = n
         candidates: candidates.map((c) => ({ name: c.name })),
       },
     } : {}),
-    sources: report.map(({ site, name, country, lang, fetched, error }) => ({
-      site, name, country, lang, fetchedToday: fetched, total: counts[site] ?? 0, ...(error ? { error } : {}),
+    sources: report.map(({ site, name, country, lang, fetched, error, about }) => ({
+      site, name, country, lang, fetchedToday: fetched, total: counts[site] ?? 0,
+      ...(about ? { about } : {}), ...(error ? { error } : {}),
     })),
     items,
   };

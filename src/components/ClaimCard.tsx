@@ -27,6 +27,7 @@ export function ClaimCard({ item, onOpen, others = [], fresh = false }: Props) {
         <span className="row gap-8">
           <VerdictBadge verdict={item.verdict} />
           {fresh && <span className="tag tag-new">Nouveau</span>}
+          {item.original && <span className="tag tag-translated" title="Traduit de l’anglais">Traduit</span>}
           {social && <span className="tag"><People />{social}</span>}
         </span>
         <span className="muted small nowrap">{ago(item.reviewDate)}</span>

@@ -70,3 +70,16 @@ Gradle se synchroniser (nouvelle dépendance WorkManager). Sur GitHub : committe
   déclarations vérifiées. Aucun décompte ni classement, par choix d'équilibre.
 - Les déclarations anciennes arrivées d'un coup (nouveau candidat) ne sont ni marquées « Nouveau » ni annoncées
   par le rappel du matin (seules les vérifications de moins de 7 jours le sont).
+
+## 1.4.0
+
+- **Traduction automatique** des vérifications en anglais (AFP Fact Check, ~60 % du fil) : ML Kit Translate, sur le
+  téléphone (`VerifNativePlugin.translate`), modèle d'environ 30 Mo téléchargé une fois. Cache par vérification
+  (`translations`), pastille « Traduit » sur les cartes, « Voir l'original » dans le détail ; recherche et
+  rapprochement fonctionnent en français comme en anglais. Désactivable : Filtres → Langue.
+- **Présentation** en 3 pages au premier lancement (revoir : Filtres → À propos).
+- **Page « Pourquoi ces sources ? »** (Filtres → Sources, et bas du détail). Fiche de chaque organisme dans
+  `collector/sources.json` → `about` (`media`, `ifcn`, `efcsn`, `note`) : modifiable sans nouvel APK.
+  N'indiquer `ifcn: true` qu'après vérification sur le registre IFCN.
+- Partage d'une vérification : lien vers l'article puis vers la fiche Play Store de Vérif.
+- Retour dans l'appli : nouvelle vérification du flux dès 5 min quand les données ont plus de 20 h.

@@ -7,6 +7,7 @@ import { openArticle, shareCheck } from '../lib/native';
 import { VerdictBadge } from '../components/VerdictBadge';
 import { ClaimCard } from '../components/ClaimCard';
 import { Back, Bookmark, External, ShareIcon } from '../components/Icons';
+import { translateTexts } from '../lib/verifNative';
 
 interface Props {
   related?: FactCheck[];
@@ -17,32 +18,60 @@ interface Props {
   /** « Retour » vers la liste, ou « Précédent » après « Sur le même sujet ». */
   backLabel?: string;
   onToggleSave: (it: FactCheck) => void;
+  onSources?: () => void;
 }
 
-export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onToggleSave, related = [], onOpen }: Props) {
+export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onToggleSave, related = [], onOpen, onSources }: Props) {
+  // Vérification traduite : la pastille bascule vers le texte d'origine.
+  const [showOriginal, setShowOriginal] = useState(false);
   // Résumé : celui de la collecte, sinon celui déjà lu sur ce téléphone, sinon lecture de l'article.
-  const initial = item.summary || cachedSummary(item.id) || null;
-  const [summary, setSummary] = useState<string | null>(initial);
+  // Pour une vérification traduite, le résumé lu sur le téléphone (en anglais) est traduit à la volée.
+  const [summary, setSummary] = useState<{ shown: string; original: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const known = item.summary || cachedSummary(item.id);
-    setSummary(known || null);
+    let cancelled = false;
+    setShowOriginal(false);
     // Remis à zéro à chaque vérification : une lecture annulée (vérification quittée
     // avant la fin) ne doit pas laisser « Lecture du résumé… » affiché.
     setLoading(false);
-    if (known !== undefined && known !== null) return; // déjà connu (ou déjà essayé sans succès : '')
-    if (!canFetchOnDevice) return;
-    let cancelled = false;
-    setLoading(true);
-    fetchSummaryOnDevice(item).then((s) => {
-      if (!cancelled) {
-        setSummary(s);
-        setLoading(false);
+    const finish = async (orig: string | null) => {
+      if (!orig) return setSummary(null);
+      if (!item.original) return setSummary({ shown: orig, original: orig });
+      try {
+        const [t] = await translateTexts([orig]);
+        if (!cancelled) setSummary({ shown: t || orig, original: orig });
+      } catch {
+        if (!cancelled) setSummary({ shown: orig, original: orig });
       }
+    };
+    if (item.summary) {
+      setSummary({ shown: item.summary, original: item.original?.summary || item.summary });
+      return () => { cancelled = true; };
+    }
+    setSummary(null);
+    const known = cachedSummary(item.id); // '' = déjà essayé sans succès
+    if (known !== undefined) {
+      finish(known || null);
+      return () => { cancelled = true; };
+    }
+    if (!canFetchOnDevice) return;
+    setLoading(true);
+    // Le titre d'origine sert à écarter un résumé qui ne ferait que le répéter.
+    const source = item.original ? { ...item, title: item.original.title } : item;
+    fetchSummaryOnDevice(source).then((s) => {
+      if (cancelled) return;
+      setLoading(false);
+      finish(s);
     });
     return () => { cancelled = true; };
   }, [item]);
+
+  const orig = showOriginal ? item.original : undefined;
+  const claim = orig?.claim ?? item.claim;
+  const rating = orig?.rating ?? item.rating;
+  const title = orig ? orig.title : item.title;
+  const summaryText = summary ? (orig ? summary.original : summary.shown) : null;
 
   return (
     <div className="screen detail" key={item.id}>
@@ -69,7 +98,12 @@ export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onTogg
               {socialLabel(item) ? ` · ${socialLabel(item)}` : ''}
             </span>
           </div>
-          <h1 className="detail-claim">« {item.claim} »</h1>
+          {item.original && (
+            <button className="translated-pill" onClick={() => setShowOriginal(!showOriginal)} aria-pressed={showOriginal}>
+              {showOriginal ? 'Texte original (anglais) · Voir la traduction' : 'Traduit de l’anglais · Voir l’original'}
+            </button>
+          )}
+          <h1 className="detail-claim">« {claim} »</h1>
           <p className="muted small">
             {item.claimant ? `Affirmation de : ${item.claimant}` : 'Auteur de l’affirmation non précisé'}
             {item.claimDate ? ` · ${longDate(item.claimDate)}` : ''}
@@ -78,12 +112,12 @@ export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onTogg
 
         <section className="panel">
           <h2 className="section-title">Conclusion du vérificateur</h2>
-          <p className="panel-rating">{item.rating || 'Voir l’article'}</p>
-          {item.title && <p className="panel-title">{item.title}</p>}
+          <p className="panel-rating">{rating || 'Voir l’article'}</p>
+          {title && <p className="panel-title">{title}</p>}
           {loading && <p className="muted small">Lecture du résumé de l'article…</p>}
-          {summary && (
+          {summaryText && (
             <>
-              <p className="panel-summary">{summary}</p>
+              <p className="panel-summary">{summaryText}</p>
               <p className="fineprint">Résumé publié par {item.publisher} avec son article.</p>
             </>
           )}
@@ -102,6 +136,7 @@ export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onTogg
             Vérif ne juge pas elle-même : chaque verdict provient de l’organisme cité, recensé par Google Fact Check Tools.
             Le classement Faux / Trompeur / Vrai est une traduction automatique de sa conclusion.
           </p>
+          {onSources && <button className="link-btn" onClick={onSources}>Pourquoi ces sources ?</button>}
         </section>
         {related.length > 0 && onOpen && (
           <section className="stack-10">

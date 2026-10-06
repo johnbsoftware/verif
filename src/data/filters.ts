@@ -25,7 +25,8 @@ export function applyFilters(items: FactCheck[], q: Query): FactCheck[] {
     if (q.theme !== 'Tout' && it.theme !== q.theme) return false;
     if (q.verdict !== 'tous' && it.verdict !== q.verdict) return false;
     if (words.length) {
-      const hay = fold([it.claim, it.title ?? '', it.claimant ?? '', it.publisher, it.rating].join(' '));
+      // Texte affiché (traduit le cas échéant) et texte d'origine : « vaccin » comme « vaccine » trouvent la vérification.
+      const hay = fold([it.claim, it.title ?? '', it.claimant ?? '', it.publisher, it.rating, it.original?.claim ?? '', it.original?.title ?? ''].join(' '));
       if (!words.every((w) => hay.includes(w))) return false;
     }
     return true;

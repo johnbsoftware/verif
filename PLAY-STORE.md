@@ -127,6 +127,7 @@ e-mail `johnb.software@gmail.com`, **site web `https://johnbsoftware.github.io/v
 > (TF1 Info), Fake Off (20 Minutes), Vrai ou Fake (franceinfo), Poligraph, De Facto…
 >
 > • Un fil clair : l'affirmation, le verdict (Faux, Trompeur, Vrai) et l'organisme qui l'a vérifiée
+> • Les vérifications internationales en anglais traduites en français, sur votre téléphone (texte original à un geste)
 > • Des filtres par pays, par thème (santé, politique, climat & catastrophes, économie…) et par verdict
 > • Le repère « Réseaux sociaux » pour les rumeurs venues de Facebook, TikTok, X, WhatsApp…
 > • Vérifier un post : dans Facebook, TikTok ou X, touchez Partager puis Vérif. Une capture d'écran fonctionne aussi :

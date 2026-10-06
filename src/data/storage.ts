@@ -9,7 +9,7 @@ import { nativeAvailable, readNativeFile, writeNativeFile } from '../lib/verifNa
 // Android, réécrites en entier à chaque modification. Sur le téléphone, il vit dans un
 // fichier privé de l'appli, chargé en mémoire au démarrage.
 
-const KEYS = ['feed', 'saved', 'settings', 'summaries', 'seen'] as const;
+const KEYS = ['feed', 'saved', 'settings', 'summaries', 'seen', 'translations', 'intro'] as const;
 export type StoreKey = (typeof KEYS)[number];
 
 const FILE_KEYS: readonly StoreKey[] = ['feed'];

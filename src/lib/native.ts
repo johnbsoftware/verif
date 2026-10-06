@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { Share } from '@capacitor/share';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { DIGEST_HOUR, DIGEST_MINUTE, FEED_URL } from '../config';
+import { DIGEST_HOUR, DIGEST_MINUTE, FEED_URL, STORE_URL } from '../config';
 import type { FactCheck, Settings } from '../types';
 import { configureDigest, nativeAvailable } from './verifNative';
 
@@ -22,11 +22,12 @@ export async function openArticle(url: string): Promise<void> {
 }
 
 export async function shareCheck(it: FactCheck): Promise<void> {
-  const text = `« ${it.claim} » — ${it.rating || 'vérifié'} selon ${it.publisher}`;
+  // Lien vers l'article d'abord (c'est la source), puis vers Vérif sur le Play Store.
+  const text = `« ${it.claim} » — ${it.rating || 'vérifié'} selon ${it.publisher}\n${it.url}\n\nTrouvé avec Vérif, le vrai du faux de l'actualité : ${STORE_URL}`;
   try {
     const nav = navigator as Navigator & { share?: unknown };
-    if (isNative || typeof nav.share === 'function') await Share.share({ title: 'Vérif', text, url: it.url, dialogTitle: 'Partager' });
-    else await nav.clipboard.writeText(`${text}\n${it.url}`);
+    if (isNative || typeof nav.share === 'function') await Share.share({ title: 'Vérif', text, dialogTitle: 'Partager' });
+    else await nav.clipboard.writeText(text);
   } catch { /* partage annulé */ }
 }
 

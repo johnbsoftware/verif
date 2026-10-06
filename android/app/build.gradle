@@ -7,8 +7,8 @@ android {
         applicationId "fr.johnbsoftware.verif"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 18
-        versionName "1.3.3"
+        versionCode 19
+        versionName "1.4.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -49,6 +49,8 @@ dependencies {
     implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
     // Vérif : rappel quotidien en arrière-plan (DigestWorker).
     implementation 'androidx.work:work-runtime:2.10.0'
+    // Vérif : traduction anglais → français sur le téléphone (modèle téléchargé à la première utilisation).
+    implementation 'com.google.mlkit:translate:17.0.3'
 }
 
 apply from: 'capacitor.build.gradle'
