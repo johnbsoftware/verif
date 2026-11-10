@@ -15,9 +15,11 @@ interface Props {
   others?: FactCheck[];
   /** Arrivée avec la dernière collecte. */
   fresh?: boolean;
+  /** Éditeur absent des organismes suivis chaque jour : signalé sur la carte. */
+  outside?: boolean;
 }
 
-export function ClaimCard({ item, onOpen, others = [], fresh = false }: Props) {
+export function ClaimCard({ item, onOpen, others = [], fresh = false, outside = false }: Props) {
   const otherPublishers = [...new Set(others.map((o) => o.publisher))].join(', ');
   const showRating = !!item.rating && !PLAIN.has(fold(item.rating).replace(/[.!\s]+$/, '').trim());
   const social = socialLabel(item);
@@ -37,6 +39,7 @@ export function ClaimCard({ item, onOpen, others = [], fresh = false }: Props) {
       <span className="card-meta">
         {item.candidate ? `${item.candidate} · ` : ''}
         {item.theme === item.country ? item.country : `${item.country} · ${item.theme}`} · {item.publisher}
+        {outside ? ' (hors organismes suivis)' : ''}
       </span>
       {others.length > 0 && (
         <span className="card-more">

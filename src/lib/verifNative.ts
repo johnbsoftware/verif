@@ -1,4 +1,4 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
 /**
  * Plugin natif maison (android/…/VerifNativePlugin.java) :
@@ -22,6 +22,8 @@ interface VerifNativePlugin {
   configureDigest(options: DigestConfig): Promise<void>;
   setKnownIds(options: { ids: string[] }): Promise<void>;
   translate(options: { texts: string[] }): Promise<{ texts: string[] }>;
+  takeOpenId(): Promise<{ id?: string }>;
+  addListener(event: 'openCheck', cb: () => void): Promise<PluginListenerHandle>;
 }
 
 const VerifNative = registerPlugin<VerifNativePlugin>('VerifNative');
@@ -73,4 +75,27 @@ export async function translateTexts(texts: string[]): Promise<string[]> {
   if (!nativeAvailable) throw new Error('indisponible');
   const r = await VerifNative.translate({ texts });
   return r.texts;
+}
+
+/**
+ * Vérification à ouvrir : l'utilisateur a touché la notification du rappel, qui n'en annonçait
+ * qu'une. null s'il n'y en a pas (ou sur un APK d'avant la 1.4.2).
+ */
+export async function takeOpenId(): Promise<string | null> {
+  if (!nativeAvailable) return null;
+  try {
+    return (await VerifNative.takeOpenId()).id || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Appelle cb quand une notification est touchée pendant que l'appli est ouverte. */
+export function onOpenCheck(cb: (id: string) => void): () => void {
+  if (!nativeAvailable) return () => {};
+  const sub = VerifNative.addListener('openCheck', async () => {
+    const id = await takeOpenId();
+    if (id) cb(id);
+  });
+  return () => { sub.then((h) => h.remove()).catch(() => {}); };
 }

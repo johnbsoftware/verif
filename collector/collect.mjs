@@ -22,9 +22,15 @@ const MAX_PAGES = 6;
 const DAILY_WINDOW_DAYS = 7; // l'indexation Google peut avoir quelques jours de retard
 const FIRST_WINDOW_DAYS = 60;
 const KEEP_DAYS = 60;
-// Présidentielle : les déclarations des candidats sont cherchées sur 12 mois et gardées toute la campagne.
-const CANDIDATE_FIRST_DAYS = 365;
-const CANDIDATE_KEEP_DAYS = 400;
+// Présidentielle : les déclarations des candidats sont cherchées sur 15 mois et gardées toute la
+// campagne (800 jours : de l'été 2025 jusqu'après le second tour). Avec 400 jours, les plus
+// anciennes sortaient de la rubrique dès novembre 2026, cinq mois avant l'élection.
+const CANDIDATE_FIRST_DAYS = 450;
+const CANDIDATE_KEEP_DAYS = 800;
+const CANDIDATE_MAX_PAGES = 10;
+// À incrémenter pour refaire une fois la recherche longue pour tous les candidats
+// (2 : récupère les déclarations sorties trop tôt de la rubrique).
+export const CANDIDATE_SEARCH_VERSION = 2;
 const SUMMARY_CONCURRENCY = 4;
 const SUMMARY_BUDGET_MS = 4 * 60 * 1000; // au-delà, on s'arrête : le reste sera fait demain
 // Certains sites refusent les navigateurs inconnus : on se présente comme un navigateur mobile, en signant.
@@ -62,18 +68,30 @@ export async function readKey() {
   return { problem: `Aucun fichier .env dans ${root}.` };
 }
 
-async function loadPrevious(where, fetchImpl) {
+/**
+ * Flux précédent (historique). En ligne : jusqu'à 3 essais, car le perdre sur une panne passagère
+ * ferait repartir la collecte de zéro (résumés à relire, historique raccourci). Un 404 est une
+ * vraie absence (toute première collecte) : pas de nouvel essai.
+ */
+export async function loadPrevious(where, fetchImpl, { tries = 3, waitMs = 5000, log = console.log } = {}) {
   if (!where) return null;
-  try {
-    if (/^https?:\/\//.test(where)) {
-      const res = await fetchImpl(where, { headers: { 'cache-control': 'no-cache' } });
-      if (!res.ok) return null;
-      return await res.json();
-    }
-    return JSON.parse(await readFile(where, 'utf8'));
-  } catch {
-    return null;
+  if (!/^https?:\/\//.test(where)) {
+    try { return JSON.parse(await readFile(where, 'utf8')); } catch { return null; }
   }
+  for (let attempt = 1; attempt <= tries; attempt++) {
+    let why;
+    try {
+      const res = await fetchImpl(where, { headers: { 'cache-control': 'no-cache' } });
+      if (res.ok) return await res.json();
+      if (res.status === 404) return null;
+      why = `HTTP ${res.status}`;
+    } catch (e) {
+      why = e?.message ?? 'erreur réseau';
+    }
+    log(`Flux précédent illisible (${why}), essai ${attempt}/${tries}`);
+    if (attempt < tries) await new Promise((r) => setTimeout(r, waitMs));
+  }
+  return null;
 }
 
 /** Télécharge l'article et en extrait le résumé écrit par la rédaction. */
@@ -152,10 +170,10 @@ export async function addSummaries(items, { fetchImpl = fetch, log = console.log
 }
 
 /** Toutes les pages d'une recherche (params : reviewPublisherSiteFilter, ou query + languageCode). */
-async function searchClaims(params, { key, maxAgeDays, fetchImpl }) {
+async function searchClaims(params, { key, maxAgeDays, fetchImpl, maxPages = MAX_PAGES }) {
   const claims = [];
   let pageToken;
-  for (let page = 0; page < MAX_PAGES; page++) {
+  for (let page = 0; page < maxPages; page++) {
     const q = new URLSearchParams({
       ...params,
       maxAgeDays: String(maxAgeDays),
@@ -212,15 +230,19 @@ export async function collect({ key, sources, election = null, previous, now = n
   // Seules comptent les affirmations dont il est l'auteur (pas celles qui parlent de lui).
   const candidates = election?.candidats ?? [];
   const candidateOf = candidateMatcher(candidates);
+  let candidateFailures = 0;
   if (candidates.length) {
-    const known = new Set(hadHistory ? previous.items.map((it) => it.candidate).filter(Boolean) : []);
+    // Recherche longue pour un candidat sans déclaration connue, et une fois pour tous quand
+    // CANDIDATE_SEARCH_VERSION change ; sinon la fenêtre quotidienne suffit.
+    const sameSearch = (previous?.election?.searchV ?? 1) === CANDIDATE_SEARCH_VERSION;
+    const known = new Set(hadHistory && sameSearch ? previous.items.map((it) => it.candidate).filter(Boolean) : []);
     const bySite = new Map(sources.map((s) => [s.site, s]));
     const seen = new Set(fresh.map((it) => it.id));
     log(`Présidentielle : ${candidates.length} candidats`);
     for (const c of candidates) {
       try {
         const maxAgeDays = known.has(c.name) ? DAILY_WINDOW_DAYS : CANDIDATE_FIRST_DAYS;
-        const claims = await searchClaims({ query: c.name, languageCode: 'fr' }, { key, maxAgeDays, fetchImpl });
+        const claims = await searchClaims({ query: c.name, languageCode: 'fr' }, { key, maxAgeDays, fetchImpl, maxPages: CANDIDATE_MAX_PAGES });
         let n = 0;
         for (const claim of claims) {
           for (const it of toItemsAnyPublisher(claim, bySite)) {
@@ -232,6 +254,7 @@ export async function collect({ key, sources, election = null, previous, now = n
         }
         log(`  ${c.name.padEnd(34)} ${String(n).padStart(4)} déclarations`);
       } catch (err) {
+        candidateFailures++;
         log(`  ${c.name.padEnd(34)} ÉCHEC : ${err.message}`);
       }
       await new Promise((r) => setTimeout(r, 150));
@@ -260,6 +283,8 @@ export async function collect({ key, sources, election = null, previous, now = n
       it.summary = old.summary;
       if (old.summaryV !== undefined) it.summaryV = old.summaryV;
     }
+    // Le compteur d'essais suit aussi : sinon un article injoignable serait relu chaque jour.
+    if (old?.summaryTries) it.summaryTries = old.summaryTries;
   }
   const items = mergeItems(history, fresh, {
     now, keepDays: KEEP_DAYS, keepDaysFor: (it) => (it.candidate ? CANDIDATE_KEEP_DAYS : KEEP_DAYS),
@@ -276,6 +301,8 @@ export async function collect({ key, sources, election = null, previous, now = n
       election: {
         name: election.election ?? 'Présidentielle',
         updated: election.maj ?? null,
+        // Recherche longue incomplète (échec pour un candidat) : elle sera refaite à la prochaine collecte.
+        searchV: candidateFailures ? previous?.election?.searchV ?? 1 : CANDIDATE_SEARCH_VERSION,
         candidates: candidates.map((c) => ({ name: c.name })),
       },
     } : {}),
@@ -306,6 +333,7 @@ async function main() {
   // Facultatif : liste des candidats (supprimer le fichier ou vider la liste pour couper la rubrique).
   const election = await readFile(resolve(HERE, 'candidats.json'), 'utf8').then(JSON.parse).catch(() => null);
   const previous = await loadPrevious(a.previous ?? process.env.PREVIOUS_FEED_URL ?? out, fetch);
+  if (!previous) console.log('Pas de flux précédent : collecte complète.');
   const feed = await collect({ key, sources, election, previous });
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, JSON.stringify(feed));

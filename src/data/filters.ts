@@ -15,21 +15,33 @@ export interface Query {
   search: string;
 }
 
+/** Mots d'une recherche, sans accents ni majuscules. */
+export const searchWords = (search: string) => fold(search).split(/\s+/).filter(Boolean);
+
+/**
+ * Vrai si la vérification contient tous les mots cherchés : affirmation, titre, résumé, auteur,
+ * candidat, organisme et verdict — dans le texte affiché (traduit le cas échéant) comme dans
+ * le texte d'origine (« vaccin » comme « vaccine » trouvent la vérification).
+ */
+export function matchesSearch(it: FactCheck, words: string[]): boolean {
+  if (!words.length) return true;
+  const hay = fold([
+    it.claim, it.title ?? '', it.summary ?? '', it.claimant ?? '', it.candidate ?? '', it.publisher, it.rating,
+    it.original?.claim ?? '', it.original?.title ?? '', it.original?.summary ?? '',
+  ].join(' '));
+  return words.every((w) => hay.includes(w));
+}
+
 export function applyFilters(items: FactCheck[], q: Query): FactCheck[] {
   const { countries, themes } = q.settings;
-  const words = fold(q.search).split(/\s+/).filter(Boolean);
+  const words = searchWords(q.search);
   return items.filter((it) => {
     if (!q.settings.english && !isFrench(it)) return false;
     if (countries.length && !countries.includes(it.country)) return false;
     if (themes.length && !themes.includes(it.theme)) return false;
     if (q.theme !== 'Tout' && it.theme !== q.theme) return false;
     if (q.verdict !== 'tous' && it.verdict !== q.verdict) return false;
-    if (words.length) {
-      // Texte affiché (traduit le cas échéant) et texte d'origine : « vaccin » comme « vaccine » trouvent la vérification.
-      const hay = fold([it.claim, it.title ?? '', it.claimant ?? '', it.publisher, it.rating, it.original?.claim ?? '', it.original?.title ?? ''].join(' '));
-      if (!words.every((w) => hay.includes(w))) return false;
-    }
-    return true;
+    return matchesSearch(it, words);
   });
 }
 

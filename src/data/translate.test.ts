@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { applyTranslation, fromTexts, pruneCache, stripTranslation, toTexts } from './translate';
+import { applyTranslation, fromTexts, isUpToDate, pruneCache, stripTranslation, toTexts } from './translate';
 import { applyFilters } from './filters';
 import { fc } from '../test/fixtures';
 import type { Settings } from '../types';
@@ -28,4 +28,21 @@ test('recherche : en français comme en anglais', () => {
 test('cache limité aux vérifications utiles', () => {
   const t = fromTexts(en, ['a', '', 'b', '']);
   expect(Object.keys(pruneCache({ x: t, y: t }, new Set(['y'])))).toEqual(['y']);
+});
+
+test('résumé arrivé après coup : la traduction en cache est à refaire', () => {
+  const before = { ...en, summary: null };
+  const cached = fromTexts(before, ['Une vidéo montre un volcan', 'Vieilles images', 'Faux', '']);
+  expect(isUpToDate(before, cached)).toBe(true);
+  expect(isUpToDate(en, cached)).toBe(false);
+  expect(isUpToDate(en, undefined)).toBe(false);
+  expect(isUpToDate(en, fromTexts(en, ['a', 'b', 'c', 'Ce clip date de 2019.']))).toBe(true);
+});
+
+test('recherche : aussi dans le résumé et le nom du candidat', async () => {
+  const { matchesSearch, searchWords } = await import('./filters');
+  const it = fc({ claim: 'Le chômage a baissé', summary: 'Selon l’Insee, le taux est resté stable.', candidate: 'Marine Tondelier' });
+  expect(matchesSearch(it, searchWords('insee'))).toBe(true);
+  expect(matchesSearch(it, searchWords('tondelier chômage'))).toBe(true);
+  expect(matchesSearch(it, searchWords('retraites'))).toBe(false);
 });

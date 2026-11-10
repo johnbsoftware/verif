@@ -66,6 +66,8 @@ public class DigestWorker extends Worker {
     static final String KEY_THEMES = "themes";
     static final String KEY_ENGLISH = "english";
     static final String KEY_KNOWN = "known";
+    /** Extra de l'intention de la notification : identifiant de la vérification à ouvrir. */
+    static final String EXTRA_OPEN_ID = "verifOpenId";
     private static final String KEY_ATTEMPT = "attempt";
     /** Collecte de GitHub en retard : on réessaie toutes les heures, 4 fois au plus. */
     private static final int MAX_ATTEMPTS = 4;
@@ -210,6 +212,8 @@ public class DigestWorker extends Worker {
         }
 
         Intent open = new Intent(ctx, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        // Une seule vérification annoncée : toucher la notification l'ouvre directement.
+        if (n == 1) open.putExtra(EXTRA_OPEN_ID, fresh.get(0).optString("id", ""));
         PendingIntent tap = PendingIntent.getActivity(ctx, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
         NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CHANNEL_ID)

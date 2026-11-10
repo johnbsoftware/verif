@@ -22,9 +22,11 @@ interface Props {
   backLabel?: string;
   onToggleSave: (it: FactCheck) => void;
   onSources?: () => void;
+  /** Éditeur absent des organismes suivis chaque jour (déclaration de candidat trouvée par son nom). */
+  outsideSources?: boolean;
 }
 
-export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onToggleSave, related = [], onOpen, onSources }: Props) {
+export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onToggleSave, related = [], onOpen, onSources, outsideSources = false }: Props) {
   // Vérification traduite : la pastille bascule vers le texte d'origine.
   const [showOriginal, setShowOriginal] = useState(false);
   // Ce que l'article explique : son résumé d'aperçu et les passages qui justifient le verdict
@@ -138,7 +140,7 @@ export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onTogg
             {why.length > 0 && (
               <>
                 <ul className="why-list">
-                  {why.map((w) => <li key={w}>{w}</li>)}
+                  {why.map((w, k) => <li key={k}>{w}</li>)}
                 </ul>
                 <p className="fineprint">
                   Extraits de l'article de {item.publisher}{item.original && !orig ? ', traduits de l’anglais' : ''}.
@@ -167,6 +169,12 @@ export function DetailScreen({ item, saved, onBack, backLabel = 'Retour', onTogg
             <span className="source-name">{item.publisher}</span>
             <span className="muted small">Publié le {longDate(item.reviewDate)} · {item.site}</span>
           </div>
+          {outsideSources && (
+            <p className="banner banner-soft">
+              {item.publisher} ne fait pas partie des organismes que Vérif suit chaque jour. Cette vérification figure ici
+              parce qu'elle porte sur une déclaration de candidat et qu'elle est recensée par Google Fact Check Tools.
+            </p>
+          )}
           <button className="primary" onClick={() => openArticle(item.url)}>
             Lire la vérification complète <External />
           </button>

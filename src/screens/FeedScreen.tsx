@@ -54,6 +54,9 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
     const since = Date.parse(feed.generatedAt) - (feed.keepDays ?? 60) * 86_400_000;
     return feed.items.filter((it) => !it.candidate || Date.parse(it.reviewDate) >= since);
   }, [feed]);
+  // Déclaration de candidat venue d'un éditeur qui n'est pas suivi chaque jour : signalée sur la carte.
+  const knownSites = useMemo(() => new Set((feed?.sources ?? []).map((s) => s.site)), [feed]);
+  const isOutside = (it: FactCheck) => !!it.candidate && knownSites.size > 0 && !knownSites.has(it.site);
   const hasElection = !!feed?.election?.candidates.length;
   const inElection = hasElection && election !== null;
 
@@ -106,7 +109,7 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
           <Search />
           <input
             type="search"
-            placeholder="Rechercher une affirmation, un sujet…"
+            placeholder={inElection ? 'Rechercher dans les déclarations…' : 'Rechercher une affirmation, un sujet…'}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             enterKeyHint="search"
@@ -153,7 +156,7 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
 
       <main className="list">
         {inElection && feed?.election ? (
-          <ElectionView election={feed.election} items={feed.items} selected={election ?? ''} onSelect={onElection} onOpen={onOpen} />
+          <ElectionView election={feed.election} items={feed.items} selected={election ?? ''} search={deferredSearch} isOutside={isOutside} onSelect={onElection} onOpen={onOpen} />
         ) : (
         <>
         {feed?.demo && (
@@ -182,7 +185,7 @@ export function FeedScreen({ feed, settings, allCountries, loading, notice, fres
           <section key={g.label} className="day">
             <h2 className="day-title">{g.label}</h2>
             {g.items.map((it) => (
-              <ClaimCard key={it.id} item={it} onOpen={onOpen} others={othersOf.get(it.id)} fresh={isFresh(it)} />
+              <ClaimCard key={it.id} item={it} onOpen={onOpen} others={othersOf.get(it.id)} fresh={isFresh(it)} outside={isOutside(it)} />
             ))}
           </section>
         ))}

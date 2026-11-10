@@ -261,3 +261,41 @@ test('présidentielle : une déclaration trouvée par nom, gardée toute la camp
   assert.equal(none.items.length, 0);
   assert.equal(none.election, undefined);
 });
+
+import { loadPrevious, CANDIDATE_SEARCH_VERSION } from './collect.mjs';
+
+test('présidentielle : déclaration de plus de 400 jours conservée jusqu’à l’élection, recherche longue refaite une fois', async () => {
+  const old = new Date('2025-09-30T10:00:00Z').toISOString();
+  const item = { id: 'abc', claim: 'Une déclaration', claimant: 'Nicolas Dupont-Aignan', candidate: 'Nicolas Dupont-Aignan', rating: 'Faux',
+    site: 'tf1info.fr', publisher: 'TF1', country: 'France', lang: 'fr', title: 'T', url: 'https://tf1info.fr/a', reviewDate: old, summary: null, summaryV: 99 };
+  const election = { candidats: [{ name: 'Nicolas Dupont-Aignan' }] };
+  const windows = [];
+  const fetchImpl = async (url) => {
+    const u = new URL(url);
+    if (u.searchParams.get('query')) windows.push(Number(u.searchParams.get('maxAgeDays')));
+    return { ok: true, json: async () => ({}) };
+  };
+  const run = (previous, now) => collect({ key: 'K', sources: [source], election, previous, now: new Date(now), fetchImpl, log: () => {}, summaries: false });
+  // Flux produit par l'ancienne version (pas de searchV) : recherche longue, une fois.
+  const first = await run({ generatedAt: 'x', election: {}, items: [item] }, '2027-04-25T05:00:00Z');
+  assert.equal(first.items.length, 1, 'gardée 572 jours après sa publication');
+  assert.equal(first.election.searchV, CANDIDATE_SEARCH_VERSION);
+  await run(first, '2027-04-26T05:00:00Z');
+  assert.deepEqual(windows, [450, 7]);
+});
+
+test('flux précédent : nouvel essai après une panne passagère, pas après un 404', async () => {
+  let calls = 0;
+  const flaky = async () => (++calls < 3 ? { ok: false, status: 503 } : { ok: true, json: async () => ({ items: [1] }) });
+  assert.deepEqual(await loadPrevious('https://x/feed.json', flaky, { waitMs: 0, log: () => {} }), { items: [1] });
+  assert.equal(calls, 3);
+  calls = 0;
+  assert.equal(await loadPrevious('https://x/feed.json', async () => { calls++; return { ok: false, status: 404 }; }, { waitMs: 0, log: () => {} }), null);
+  assert.equal(calls, 1);
+});
+
+test('thèmes : découvert bancaire en Économie, ogive nucléaire en International', () => {
+  assert.equal(classifyTheme('Les découverts bancaires interdits à partir de novembre'), 'Économie');
+  assert.equal(classifyTheme('La Russie a dévoilé au monde une de ses ogives nucléaires'), 'International');
+  assert.equal(classifyTheme('La France ferme une centrale nucléaire'), 'Climat & catastrophes');
+});

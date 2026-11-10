@@ -31,3 +31,15 @@ test('déclarations anciennes arrivées d’un coup (nouveau candidat) : pas « 
   const day2 = nextSeen(feed('2026-09-25T07:00:00Z', [recent, a, b, oldOne]), day1);
   expect(day2.fresh).toEqual([recent.id]);
 });
+
+test('deuxième collecte le même matin (rattrapage) : les « nouveaux » du matin le restent', () => {
+  const day1 = nextSeen(feed('2026-09-23T04:10:00Z'), null);
+  const recent = fc({ reviewDate: '2026-09-23T20:00:00Z' });
+  const late = fc({ reviewDate: '2026-09-24T05:00:00Z' });
+  const morning = nextSeen(feed('2026-09-24T04:10:00Z', [recent, a, b]), day1);
+  expect(morning.fresh).toEqual([recent.id]);
+  const catchUp = nextSeen(feed('2026-09-24T06:45:00Z', [late, recent, a, b]), morning);
+  expect(catchUp.fresh.sort()).toEqual([late.id, recent.id].sort());
+  // Le lendemain, on repart de zéro.
+  expect(nextSeen(feed('2026-09-25T04:10:00Z', [late, recent, a, b]), catchUp).fresh).toEqual([]);
+});

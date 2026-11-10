@@ -6,8 +6,17 @@ import { Back, External } from '../components/Icons';
 // « Pourquoi ces sources ? » : comment Vérif choisit ses sources, ce qui fait la fiabilité
 // d'un organisme de vérification, et la fiche de chaque organisme (collector/sources.json → about).
 
+/** Éditeurs présents dans le flux sans être suivis chaque jour (déclarations de candidats trouvées par nom). */
+export function otherPublishers(feed: Feed | null): { site: string; name: string }[] {
+  const known = new Set((feed?.sources ?? []).map((s) => s.site));
+  const out = new Map<string, string>();
+  for (const it of feed?.items ?? []) if (!known.has(it.site) && !out.has(it.site)) out.set(it.site, it.publisher);
+  return [...out].map(([site, name]) => ({ site, name })).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+}
+
 export function SourcesScreen({ feed, onBack }: { feed: Feed | null; onBack: () => void }) {
   const sources = [...(feed?.sources ?? [])].sort((a, b) => b.total - a.total);
+  const others = otherPublishers(feed);
   return (
     <div className="screen detail" role="dialog" aria-modal="true" aria-label="Pourquoi ces sources ?">
       <header className="detail-head">
@@ -81,6 +90,27 @@ export function SourcesScreen({ feed, onBack }: { feed: Feed | null; onBack: () 
               </button>
             ))}
           </div>
+          {others.length > 0 && (
+            <>
+              <h2 className="section-title">Autres éditeurs cités</h2>
+              <p className="intro">
+                Pour la rubrique {feed?.election?.name ?? 'Présidentielle'}, Vérif cherche aussi les déclarations des
+                candidats par leur nom. Certaines ont été vérifiées par des éditeurs qui ne sont pas suivis chaque jour,
+                mais qui sont eux aussi recensés par Google Fact Check Tools :
+              </p>
+              <div className="group">
+                {others.map((s) => (
+                  <button key={s.site} className="group-row about-row" onClick={() => openArticle(`https://${s.site}`)}>
+                    <span className="stack-2">
+                      {s.name}
+                      <span className="muted small">{s.site}</span>
+                    </span>
+                    <External />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           <p className="fineprint">
             Le statut IFCN / EFCSN n'est indiqué que lorsqu'il a été vérifié sur les registres officiels ; consultez-les pour
             les autres organismes.

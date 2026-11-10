@@ -16,6 +16,15 @@ export type TranslationCache = Record<string, Translated>;
 
 export const needsTranslation = (it: FactCheck) => !isFrench(it);
 
+/**
+ * Vrai si la traduction en cache couvre encore la vérification. Le résumé arrive parfois un jour
+ * ou deux après le reste (article injoignable lors de la première collecte) : sans cela, la carte
+ * resterait traduite avec un résumé en anglais.
+ */
+export function isUpToDate(it: FactCheck, tr: Translated | undefined): boolean {
+  return !!tr && !(it.summary && !tr.summary);
+}
+
 /** Version affichée : textes traduits, original conservé. */
 export function applyTranslation(it: FactCheck, tr: Translated | undefined): FactCheck {
   if (!tr || it.original) return it;

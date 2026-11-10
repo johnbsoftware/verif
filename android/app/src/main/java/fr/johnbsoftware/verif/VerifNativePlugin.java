@@ -1,6 +1,7 @@
 package fr.johnbsoftware.verif;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -38,6 +39,39 @@ import org.json.JSONArray;
 public class VerifNativePlugin extends Plugin {
 
     private Translator translator;
+
+    /** Vérification à ouvrir (notification du rappel touchée), en attente jusqu'à takeOpenId(). */
+    private String pendingOpenId;
+
+    @Override
+    public void load() {
+        captureOpen(getActivity().getIntent(), false);
+    }
+
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        super.handleOnNewIntent(intent);
+        captureOpen(intent, true);
+    }
+
+    private void captureOpen(Intent intent, boolean notify) {
+        if (intent == null) return;
+        // Appli rouverte depuis les applis récentes : l'ancienne intention ne doit pas être rejouée.
+        if ((intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return;
+        String id = intent.getStringExtra(DigestWorker.EXTRA_OPEN_ID);
+        if (id == null || id.isEmpty()) return;
+        intent.removeExtra(DigestWorker.EXTRA_OPEN_ID); // consommée
+        pendingOpenId = id;
+        if (notify) notifyListeners("openCheck", new JSObject());
+    }
+
+    @PluginMethod
+    public void takeOpenId(PluginCall call) {
+        JSObject result = new JSObject();
+        if (pendingOpenId != null) result.put("id", pendingOpenId);
+        pendingOpenId = null;
+        call.resolve(result);
+    }
 
     private synchronized Translator translator() {
         if (translator == null) {

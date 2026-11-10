@@ -5,7 +5,7 @@ import { cachedFeed, migrateItem, refreshFeed } from './data/feed';
 import { load, save } from './data/storage';
 import { EXPECT_NEW_AFTER_MS, RECHECK_AFTER_MS, REFRESH_AFTER_MS, RENAMED_THEMES } from './config';
 import { isNative, setDailyDigest, syncDigest } from './lib/native';
-import { setKnownIds } from './lib/verifNative';
+import { onOpenCheck, setKnownIds, takeOpenId } from './lib/verifNative';
 import { nextSeen, type SeenState } from './data/seen';
 import { hourLabel, whenLabel } from './lib/format';
 import { FeedScreen } from './screens/FeedScreen';
@@ -111,6 +111,15 @@ export default function App() {
     return onShared(show);
   }, []);
 
+  // Notification du rappel touchée (une seule vérification annoncée) : on l'ouvre directement.
+  // Si elle n'est pas encore dans le flux affiché, on actualise une fois avant de renoncer.
+  const [toOpen, setToOpen] = useState<{ id: string; refreshed: boolean } | null>(null);
+  useEffect(() => {
+    const ask = (id: string) => setToOpen({ id, refreshed: false });
+    takeOpenId().then((id) => id && ask(id));
+    return onOpenCheck(ask);
+  }, []);
+
   // Bouton retour Android : détail → liste → onglet Fil → quitter.
   const nav = useRef({ detail, tab, election, intro, sourcesOpen });
   nav.current = { detail, tab, election, intro, sourcesOpen };
@@ -145,6 +154,23 @@ export default function App() {
   // Enregistre les réglages migrés (thèmes renommés) une fois pour toutes.
   useEffect(() => { save('settings', settings); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const allCountries = useMemo(() => {
+    const set = new Set<string>([...(feed?.sources ?? []).map((s) => s.country), ...(feed?.items ?? []).map((i) => i.country)]);
+    return [...set].sort((a, b) => {
+      const ia = COUNTRY_ORDER.indexOf(a), ib = COUNTRY_ORDER.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, 'fr');
+    });
+  }, [feed]);
+
+  // Un pays coché peut disparaître du flux (source retirée, déclaration de candidat expirée) : on
+  // l'oublie, sinon il resterait coché sans case pour le décocher, et pourrait vider le fil.
+  useEffect(() => {
+    if (!feed || feed.demo || !settings.countries.length) return;
+    const valid = settings.countries.filter((c) => allCountries.includes(c));
+    if (valid.length === settings.countries.length) return;
+    updateSettings({ ...settings, countries: valid.length === allCountries.length ? [] : valid });
+  }, [allCountries]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Le rappel natif filtre comme le fil : on lui transmet pays, thèmes et langue à chaque changement.
   const { dailyDigest, countries, themes, english } = settings;
   useEffect(() => {
@@ -172,7 +198,7 @@ export default function App() {
   const freshIds = useMemo(() => new Set(seen?.generatedAt === feed?.generatedAt ? seen?.fresh ?? [] : []), [seen, feed]);
 
   // Vérifications en anglais traduites sur le téléphone ; `shown` est ce que l'appli affiche.
-  const tr = useTranslations(feed, saved, settings.translate);
+  const tr = useTranslations(feed, saved, settings.translate, settings.english);
   const shown = tr.feed;
 
   const toggleSave = (it: FactCheck) => {
@@ -182,15 +208,25 @@ export default function App() {
     save('saved', next);
   };
 
-  const related = useMemo(() => relatedIndex(shown?.items ?? []), [shown]);
+  useEffect(() => {
+    if (!toOpen) return;
+    const it = shown?.items.find((x) => x.id === toOpen.id);
+    if (it) {
+      setToOpen(null);
+      setIntro(false);
+      setSourcesOpen(false);
+      setTab('feed');
+      setStack([it]);
+    } else if (!loading) {
+      if (toOpen.refreshed) setToOpen(null);
+      else {
+        setToOpen({ ...toOpen, refreshed: true });
+        refresh();
+      }
+    }
+  }, [toOpen, shown, loading, refresh]);
 
-  const allCountries = useMemo(() => {
-    const set = new Set<string>([...(feed?.sources ?? []).map((s) => s.country), ...(feed?.items ?? []).map((i) => i.country)]);
-    return [...set].sort((a, b) => {
-      const ia = COUNTRY_ORDER.indexOf(a), ib = COUNTRY_ORDER.indexOf(b);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, 'fr');
-    });
-  }, [feed]);
+  const related = useMemo(() => relatedIndex(shown?.items ?? []), [shown]);
 
   return (
     <div className="app">
@@ -249,6 +285,7 @@ export default function App() {
           related={settings.grouped ? related.get(detail.id) ?? [] : []}
           onOpen={openRelated}
           onSources={() => setSourcesOpen(true)}
+          outsideSources={!!detail.candidate && !!feed?.sources.length && !feed.sources.some((s) => s.site === detail.site)}
         />
       )}
 
