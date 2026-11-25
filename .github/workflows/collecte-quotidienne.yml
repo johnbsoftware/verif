@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploiement.outputs.page_url }}
+      url: ${{ steps.deploiement.outputs.page_url || steps.deploiement2.outputs.page_url || steps.deploiement3.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
 
@@ -62,7 +62,29 @@ jobs:
         with:
           path: site
 
+      # Le déploiement échoue parfois sur une panne passagère de GitHub (« No artifacts named
+      # github-pages were found » alors que l'envoi a réussi). On réessaie deux fois, après 2 puis
+      # 5 minutes ; la collecte n'est pas refaite. Si les trois essais échouent, l'exécution est en
+      # échec (e-mail de GitHub) et le passage de rattrapage ou celui du lendemain prend le relais.
       - id: deploiement
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Attente avant un nouvel essai
+        if: steps.deploiement.outcome == 'failure'
+        run: sleep 120
+
+      - id: deploiement2
+        if: steps.deploiement.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Attente avant un dernier essai
+        if: steps.deploiement.outcome == 'failure' && steps.deploiement2.outcome == 'failure'
+        run: sleep 300
+
+      - id: deploiement3
+        if: steps.deploiement.outcome == 'failure' && steps.deploiement2.outcome == 'failure'
         uses: actions/deploy-pages@v4
 
       - name: Maintien de la collecte (commit si le dépôt est inactif depuis 45 jours)
